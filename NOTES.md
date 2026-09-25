@@ -19,7 +19,7 @@ Newest milestone first.
 | Behaviour | curl through proxy, `docker compose stop api` | `/` 200 (web), `/api/*` → api 404 JSON, `/readyz` ready; SIGTERM → drain → close server → close pool → exit 0 |
 | Isolation | `wget db` from `web`; outbound fetch from `worker` | db unresolvable from edge network; worker has no egress |
 | Vulnerabilities | `make scan` (Trivy 0.74.0) | 0 fixable CRITICAL in all five images |
-| CI workflow | `actionlint 1.7.12` | clean. **Not executed**: repo has no remote yet |
+| CI workflow | `actionlint 1.7.12`; first GitHub run [36191391152](https://github.com/all-black-493/paysync/actions/runs/36191391152) on `7e884a9` | clean; every step green (lint, typecheck, tests, image checks, smoke, Trivy, SBOM) in ~2.5 min |
 
 ### What exists
 
