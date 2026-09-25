@@ -1,5 +1,6 @@
 import { inspect } from 'node:util'
-import { createPool, loadMigrations } from '@paysync/db'
+import { createAuth } from '@paysync/auth'
+import { createDb, createPool, loadMigrations } from '@paysync/db'
 import {
   ConfigError,
   DATABASE_SECRETS,
@@ -19,10 +20,13 @@ const configSchema = z.object({
   ...databaseEnvShape,
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1_000).default(15_000),
+  PUBLIC_URL: z.url().refine((u) => !u.endsWith('/'), 'no trailing slash'),
+  BETTER_AUTH_SECRET: z.string().min(32),
+  API_DOCS: z.enum(['on', 'off']).default('off'),
 })
 
 async function main(): Promise<void> {
-  const config = loadConfig(configSchema, { secrets: DATABASE_SECRETS })
+  const config = loadConfig(configSchema, { secrets: [...DATABASE_SECRETS, 'BETTER_AUTH_SECRET'] })
   const logger = createLogger({ service: 'api', level: config.LOG_LEVEL })
   const pool = createPool({
     url: config.DATABASE_URL,
@@ -31,7 +35,17 @@ async function main(): Promise<void> {
     applicationName: 'paysync-api',
     logger,
   })
-  const { server, health } = createApiServer({ pool, migrations: loadMigrations(), logger })
+  const db = createDb(pool)
+  const auth = createAuth({ db, secret: config.BETTER_AUTH_SECRET, baseURL: config.PUBLIC_URL })
+  const { server, health } = createApiServer({
+    pool,
+    db,
+    auth,
+    migrations: loadMigrations(),
+    logger,
+    publicUrl: config.PUBLIC_URL,
+    docs: config.API_DOCS === 'on' && config.NODE_ENV !== 'production',
+  })
 
   installGracefulShutdown({
     logger,
@@ -50,7 +64,7 @@ async function main(): Promise<void> {
   })
 
   await listen(server, config.PORT)
-  logger.info({ port: config.PORT }, 'api listening')
+  logger.info({ port: config.PORT, docs: config.API_DOCS }, 'api listening')
 }
 
 main().catch((error: unknown) => {

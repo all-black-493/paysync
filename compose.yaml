@@ -76,10 +76,14 @@ services:
       DATABASE_URL: postgres://paysync_app@db:5432/paysync
       DB_POOL_MAX: ${API_DB_POOL_MAX:-10}
       PORT: 3000
+      PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:8080}
+      API_DOCS: ${API_DOCS:-off}
+      BETTER_AUTH_SECRET_FILE: /run/secrets/better_auth_secret
       NODE_OPTIONS: --max-old-space-size=384
     secrets:
       - source: db_app_password
         target: db_password
+      - better_auth_secret
     depends_on:
       db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
@@ -178,3 +182,5 @@ secrets:
     file: ./secrets/db_app_password
   db_readonly_password:
     file: ./secrets/db_readonly_password
+  better_auth_secret:
+    file: ./secrets/better_auth_secret

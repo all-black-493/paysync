@@ -117,6 +117,13 @@ test-integration: secrets ## Integration tests only
 test-unit: secrets ## Unit tests only (no database)
 	$(TOOLS) pnpm test:unit
 
+.PHONY: snapshots
+snapshots: secrets ## Rewrite reviewed snapshots (OpenAPI document) after an intended contract change
+	$(TEST) run --rm --build --no-deps -e CI= \
+	  -v "$(CURDIR)/apps/api/src/__snapshots__:/repo/apps/api/src/__snapshots__" \
+	  test sh -c './node_modules/.bin/vitest run --project unit --update apps/api/src/contract.test.ts \
+	    && chown -R '"$$(id -u):$$(id -g)"' apps/api/src/__snapshots__'
+
 .PHONY: lint
 lint: secrets ## ESLint
 	$(TOOLS) pnpm lint

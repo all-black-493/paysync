@@ -1,16 +1,54 @@
-import { createServer, type Server } from 'node:http'
-import { checkMigrations, type Migration, type Pool } from '@paysync/db'
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import type { Auth } from '@paysync/auth'
+import { checkMigrations, type Db, type Migration, type Pool } from '@paysync/db'
 import { createHealthRoutes, type HealthRoutes, type Logger } from '@paysync/platform'
+import { ERROR_STATUS } from '@paysync/contract'
+import { COMMON_ERROR_STATUS_MAP, OpenAPIGenerator } from '@orpc/openapi'
+import { OpenAPIHandler } from '@orpc/openapi/node'
+import { OpenAPIReferenceHandlerPlugin } from '@orpc/openapi/plugins'
+import { ORPCError, onError } from '@orpc/server'
+import { RPCHandler } from '@orpc/server/node'
+import {
+  CORSHandlerPlugin,
+  GetMethodCsrfProtectionHandlerPlugin,
+  PrototypePollutionProtectionHandlerPlugin,
+  RequestHeadersHandlerPlugin,
+  RequestLimitHandlerPlugin,
+  ResponseHeadersHandlerPlugin,
+} from '@orpc/server/plugins'
+import { ZodToJsonSchemaConverter } from '@orpc/zod'
+import { toNodeHandler } from 'better-auth/node'
+import { router } from './orpc/router.js'
 
 export interface ApiServerDeps {
   readonly pool: Pool
+  readonly db: Db
+  readonly auth: Auth
   readonly migrations: readonly Migration[]
   readonly logger: Logger
+  /** Browser-facing origin; the only CORS origin allowed. */
+  readonly publicUrl: string
+  /** Serve the API reference UI and spec (non-production only). */
+  readonly docs: boolean
 }
 
 export interface ApiServer {
   readonly server: Server
   readonly health: HealthRoutes
+}
+
+const MAX_BODY_BYTES = 1024 * 1024
+const errorStatusMap = { ...COMMON_ERROR_STATUS_MAP, ...ERROR_STATUS }
+
+export function openApiGenerator() {
+  return new OpenAPIGenerator({ converters: [new ZodToJsonSchemaConverter()] })
+}
+
+export function generateSpec(): ReturnType<OpenAPIGenerator['generate']> {
+  return openApiGenerator().generate(router, {
+    base: { info: { title: 'Paysync API', version: '1.0.0' }, servers: [{ url: '/api' }] },
+    errorStatusMap,
+  })
 }
 
 export function createApiServer(deps: ApiServerDeps): ApiServer {
@@ -33,10 +71,65 @@ export function createApiServer(deps: ApiServerDeps): ApiServer {
     ],
   })
 
-  const server = createServer((req, res) => {
+  const logError = (error: unknown) => {
+    if (error instanceof ORPCError && error.code !== 'INTERNAL_SERVER_ERROR') return
+    deps.logger.error({ err: error }, 'procedure failed')
+  }
+  const commonPlugins = () => [
+    new CORSHandlerPlugin({ origin: [deps.publicUrl], credentials: true }),
+    new RequestLimitHandlerPlugin({ maxBodySize: MAX_BODY_BYTES }),
+    new PrototypePollutionProtectionHandlerPlugin(),
+    new RequestHeadersHandlerPlugin(),
+    new ResponseHeadersHandlerPlugin(),
+  ]
+
+  const rpc = new RPCHandler(router, { plugins: commonPlugins(), interceptors: [onError(logError)] })
+  const rest = new OpenAPIHandler(router, {
+    errorStatusMap,
+    plugins: [
+      ...commonPlugins(),
+      new GetMethodCsrfProtectionHandlerPlugin(),
+      ...(deps.docs
+        ? [
+            new OpenAPIReferenceHandlerPlugin({
+              docsPath: '/v1/docs',
+              specPath: '/v1/openapi.json',
+              spec: generateSpec,
+            }),
+          ]
+        : []),
+    ],
+    interceptors: [onError(logError)],
+  })
+  const authHandler = toNodeHandler(deps.auth)
+
+  const baseContext = { auth: deps.auth, db: deps.db, logger: deps.logger }
+
+  const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (health.handle(req, res)) return
+    const path = (req.url ?? '').split('?', 1)[0] ?? ''
+
+    if (path.startsWith('/api/auth/')) {
+      await authHandler(req, res)
+      return
+    }
+    if (path.startsWith('/api/rpc/')) {
+      const { matched } = await rpc.handle(req, res, { prefix: '/api/rpc', context: { ...baseContext, surface: 'web' } })
+      if (matched) return
+    } else if (path.startsWith('/api/v1/')) {
+      const { matched } = await rest.handle(req, res, { prefix: '/api', context: { ...baseContext, surface: 'rest' } })
+      if (matched) return
+    }
     res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ status: 'not_found' }))
+  }
+
+  const server = createServer((req, res) => {
+    route(req, res).catch((error: unknown) => {
+      deps.logger.error({ err: error }, 'unhandled request error')
+      if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ status: 'internal_error' }))
+    })
   })
   server.on('clientError', (error, socket) => {
     deps.logger.debug({ err: error }, 'client error')

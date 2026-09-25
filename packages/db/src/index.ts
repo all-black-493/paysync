@@ -29,3 +29,4 @@ export {
   type PostJournalResult,
 } from './ledger.js'
 export { pgConstraint, pgErrorCode, withOrg, type Tx, type WithOrgOptions } from './tenancy.js'
+export { CONSTRAINTS, SQLSTATE } from './constraints.js'

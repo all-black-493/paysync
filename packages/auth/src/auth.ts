@@ -1,6 +1,7 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
-import type { Db } from '@paysync/db'
+import { schema, type Db } from '@paysync/db'
 import { betterAuth } from 'better-auth'
+import { asc, eq } from 'drizzle-orm'
 import { organization } from 'better-auth/plugins'
 import { ac, roles } from './permissions.js'
 
@@ -28,6 +29,21 @@ export function createAuth(options: AuthOptions) {
       defaultCookieAttributes: { sameSite: 'lax', httpOnly: true, secure },
     },
     plugins: [organization({ ac, roles, creatorRole: 'owner' })],
+    databaseHooks: {
+      session: {
+        create: {
+          before: async (session) => {
+            const [first] = await options.db
+              .select({ organizationId: schema.member.organizationId })
+              .from(schema.member)
+              .where(eq(schema.member.userId, session.userId))
+              .orderBy(asc(schema.member.createdAt))
+              .limit(1)
+            return { data: { ...session, activeOrganizationId: first?.organizationId ?? null } }
+          },
+        },
+      },
+    },
   })
 }
 

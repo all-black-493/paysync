@@ -1,34 +1,22 @@
-import type { AddressInfo } from 'node:net'
-import { loadMigrations } from '@paysync/db'
-import { closeServer, createLogger, listen } from '@paysync/platform'
 import { createTestDatabase, type TestDatabase } from '@paysync/test-utils'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createApiServer, type ApiServer } from './server.js'
-
-const logger = createLogger({ service: 'test', level: 'silent' })
-
-async function startApi(db: TestDatabase): Promise<ApiServer & { url: (path: string) => string }> {
-  const api = createApiServer({ pool: db.pool('app'), migrations: loadMigrations(), logger })
-  await listen(api.server, 0, '127.0.0.1')
-  const { port } = api.server.address() as AddressInfo
-  return { ...api, url: (path) => `http://127.0.0.1:${port}${path}` }
-}
+import { startTestApi, type TestApi } from './harness.test.support.js'
 
 describe('api health against a migrated database', () => {
   let db: TestDatabase
-  let api: Awaited<ReturnType<typeof startApi>>
+  let api: TestApi
   beforeAll(async () => {
     db = await createTestDatabase()
-    api = await startApi(db)
+    api = await startTestApi(db)
   })
   afterAll(async () => {
-    await closeServer(api.server)
+    await api.close()
     await db.drop()
   })
 
   it('is healthy and ready', async () => {
-    expect((await fetch(api.url('/healthz'))).status).toBe(200)
-    const res = await fetch(api.url('/readyz'))
+    expect((await fetch(`${api.baseUrl}/healthz`)).status).toBe(200)
+    const res = await fetch(`${api.baseUrl}/readyz`)
     expect(res.status).toBe(200)
     expect(await res.json()).toMatchObject({
       status: 'ready',
@@ -41,30 +29,31 @@ describe('api health against a migrated database', () => {
 
   it('stops being ready while draining', async () => {
     api.health.startDraining()
-    expect((await fetch(api.url('/readyz'))).status).toBe(503)
-    expect((await fetch(api.url('/healthz'))).status).toBe(200)
+    expect((await fetch(`${api.baseUrl}/readyz`)).status).toBe(503)
+    expect((await fetch(`${api.baseUrl}/healthz`)).status).toBe(200)
   })
 
-  it('404s everything else', async () => {
-    expect((await fetch(api.url('/api/anything'))).status).toBe(404)
+  it('404s unknown paths', async () => {
+    expect((await fetch(`${api.baseUrl}/nothing`)).status).toBe(404)
+    expect((await fetch(`${api.baseUrl}/api/v1/nothing`)).status).toBe(404)
   })
 })
 
 describe('api health against an unmigrated database', () => {
   let db: TestDatabase
-  let api: Awaited<ReturnType<typeof startApi>>
+  let api: TestApi
   beforeAll(async () => {
     db = await createTestDatabase({ from: 'empty' })
-    api = await startApi(db)
+    api = await startTestApi(db)
   })
   afterAll(async () => {
-    await closeServer(api.server)
+    await api.close()
     await db.drop()
   })
 
   it('is alive but not ready', async () => {
-    expect((await fetch(api.url('/healthz'))).status).toBe(200)
-    const res = await fetch(api.url('/readyz'))
+    expect((await fetch(`${api.baseUrl}/healthz`)).status).toBe(200)
+    const res = await fetch(`${api.baseUrl}/readyz`)
     expect(res.status).toBe(503)
     expect(await res.json()).toMatchObject({ checks: [{ name: 'database', ok: true }, { name: 'migrations', ok: false }] })
   })
