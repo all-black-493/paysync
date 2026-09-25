@@ -150,15 +150,41 @@ export const DailySummary = z
 
 export const Me = z
   .object({
-    user: z.object({ id: z.string(), name: z.string(), email: z.email() }).strict(),
+    actor: z
+      .object({
+        type: z.enum(['user', 'api_key']),
+        id: z.string(),
+        name: z.string(),
+        email: z.email().nullable(),
+      })
+      .strict(),
     organization: z.object({ id: z.string(), name: z.string(), slug: z.string() }).strict(),
-    role: z.string(),
+    role: z.string().describe('Organization role for users; "api_key:read" or "api_key:write" for integrator keys.'),
   })
   .strict()
   .meta({ id: 'Me' })
+
+export const ApiKeyScope = z
+  .enum(['read', 'write'])
+  .describe('read: all read procedures. write: read plus creating/updating expected payments and annotating exceptions. Keys can never approve, void, write off, unmatch or move money.')
+
+export const ApiKey = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    scope: ApiKeyScope.nullable(),
+    start: z.string().nullable().describe('First characters of the key, for recognising it.'),
+    enabled: z.boolean(),
+    createdAt: IsoDateTime,
+    expiresAt: IsoDateTime.nullable(),
+    lastUsedAt: IsoDateTime.nullable(),
+  })
+  .strict()
+  .meta({ id: 'ApiKey' })
 
 export type TransactionOutput = z.output<typeof Transaction>
 export type ExpectedPaymentOutput = z.output<typeof ExpectedPayment>
 export type ExceptionOutput = z.output<typeof ReconException>
 export type MatchOutput = z.output<typeof Match>
 export type DailySummaryOutput = z.output<typeof DailySummary>
+export type ApiKeyOutput = z.output<typeof ApiKey>

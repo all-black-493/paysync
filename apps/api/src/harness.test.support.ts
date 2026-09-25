@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
-import { createAuth, type Auth, type RoleName } from '@paysync/auth'
+import type { RoleName } from '@paysync/auth'
+import { createAuth, type Auth } from './auth.js'
 import type { Contract } from '@paysync/contract'
 import { createDb, loadMigrations, type Db } from '@paysync/db'
 import { closeServer, createLogger, listen } from '@paysync/platform'
@@ -90,11 +91,19 @@ export function rpcClient(api: TestApi, cookie?: string): RouterContractClient<C
 }
 
 export async function rest(api: TestApi, cookie: string | undefined, method: string, path: string, body?: unknown) {
+  return request(api, cookie ? { cookie } : {}, method, path, body)
+}
+
+export async function restWithKey(api: TestApi, apiKey: string, method: string, path: string, body?: unknown) {
+  return request(api, { 'x-api-key': apiKey }, method, path, body)
+}
+
+async function request(api: TestApi, auth: Record<string, string>, method: string, path: string, body?: unknown) {
   const res = await fetch(`${api.baseUrl}/api${path}`, {
     method,
     headers: {
       origin: PUBLIC_URL,
-      ...(cookie ? { cookie } : {}),
+      ...auth,
       ...(body === undefined ? {} : { 'content-type': 'application/json' }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),

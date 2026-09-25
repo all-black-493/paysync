@@ -8,5 +8,6 @@ sed -i \
   -e 's/= pgTable(/= authSchema.table(/' \
   -e 's/timestamp("\([a-z_]*\)")/timestamp("\1", { withTimezone: true })/' \
   "$f"
-sed -i '0,/^} from "drizzle-orm\/pg-core";$/s//} from "drizzle-orm\/pg-core";\n\nexport const authSchema = pgSchema("auth");/' "$f"
+grep -q '^export const authSchema' "$f" ||
+  sed -i '0,/^} from "drizzle-orm\/pg-core";$/s//} from "drizzle-orm\/pg-core";\n\nexport const authSchema = pgSchema("auth");/' "$f"
 if grep -q 'pgTable\|timestamp("[a-z_]*")' "$f"; then echo "auth schema post-processing incomplete" >&2; exit 1; fi

@@ -52,6 +52,8 @@ export interface MutationOptions<T> {
   /** Output schema, used to re-validate a stored response on idempotent replay. */
   readonly output: z.ZodType<Preview<T>>
   readonly run: (tx: Tx) => Promise<{ readonly result: T; readonly changed: boolean }>
+  /** What to keep for idempotent replay; strip one-time secrets here. */
+  readonly stored?: (preview: Preview<T>) => Preview<T>
 }
 
 /**
@@ -93,12 +95,12 @@ export async function mutate<T>(options: MutationOptions<T>): Promise<Preview<T>
         key: input.idempotencyKey,
         action: options.action,
         requestHash: hash,
-        response: preview,
+        response: options.stored ? options.stored(preview) : preview,
       })
       await tx.insert(schema.auditEvent).values({
         orgId: caller.orgId,
         surface: options.surface,
-        userId: caller.userId,
+        userId: caller.actorId,
         action: options.action,
         input: redact(input),
         outcome: changed ? 'changed' : 'unchanged',

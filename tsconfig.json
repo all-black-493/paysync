@@ -15,15 +15,6 @@
     },
     {
       "path": "packages/contract"
-    },
-    {
-      "path": "apps/api"
-    },
-    {
-      "path": "apps/worker"
-    },
-    {
-      "path": "apps/migrate"
     }
   ]
 }

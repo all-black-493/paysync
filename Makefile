@@ -73,9 +73,9 @@ db-migration: secrets ## Create an empty hand-written SQL migration: make db-mig
 .PHONY: auth-schema
 auth-schema: secrets ## Regenerate the Better Auth Drizzle schema (then: make db-generate NAME=...)
 	$(TEST) run --rm --build --no-deps --user "$$(id -u):$$(id -g)" -e HOME=/tmp \
-	  -v "$(CURDIR)/packages/db/src/schema:/repo/packages/db/src/schema" -w /repo/packages/auth \
+	  -v "$(CURDIR)/packages/db/src/schema:/repo/packages/db/src/schema" -w /repo/apps/api \
 	  test ./node_modules/.bin/auth generate --config auth.cli.ts --adapter drizzle --dialect postgresql \
-	  --output ../db/src/schema/auth.ts --yes
+	  --output ../../packages/db/src/schema/auth.ts --yes
 	./scripts/auth-schema-postprocess.sh
 
 .PHONY: seed

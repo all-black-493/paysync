@@ -192,6 +192,12 @@ importers:
 
   apps/api:
     dependencies:
+      '@better-auth/api-key':
+        specifier: 1.7.6
+        version: 1.7.6(@better-auth/core@1.7.6(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.3))(@better-auth/utils@0.4.2)(better-auth@1.7.6(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(pg@8.23.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(better-call@1.4.0(zod@4.6.5))
+      '@better-auth/drizzle-adapter':
+        specifier: 1.7.6
+        version: 1.7.6(@better-auth/core@1.7.6(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.3))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))
       '@orpc/contract':
         specifier: 2.0.0-beta.40
         version: 2.0.0-beta.40
@@ -222,6 +228,9 @@ importers:
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0)
+      pg:
+        specifier: 8.23.0
+        version: 8.23.0
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -232,6 +241,15 @@ importers:
       '@paysync/test-utils':
         specifier: workspace:*
         version: link:../../packages/test-utils
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      auth:
+        specifier: 1.7.6
+        version: 1.7.6(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.3)(pg@8.23.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.6)(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
   apps/migrate:
     dependencies:
@@ -263,6 +281,9 @@ importers:
       '@orpc/tanstack-query':
         specifier: 2.0.0-beta.40
         version: 2.0.0-beta.40(@tanstack/query-core@5.103.2)
+      '@paysync/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@paysync/contract':
         specifier: workspace:*
         version: link:../../packages/contract
@@ -303,34 +324,9 @@ importers:
 
   packages/auth:
     dependencies:
-      '@better-auth/drizzle-adapter':
-        specifier: 1.7.6
-        version: 1.7.6(@better-auth/core@1.7.6(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.3))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))
-      '@paysync/db':
-        specifier: workspace:*
-        version: link:../db
-      '@paysync/platform':
-        specifier: workspace:*
-        version: link:../platform
       better-auth:
         specifier: 1.7.6
         version: 1.7.6(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(pg@8.23.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      drizzle-orm:
-        specifier: 0.45.3
-        version: 0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0)
-      pg:
-        specifier: 8.23.0
-        version: 8.23.0
-    devDependencies:
-      '@paysync/test-utils':
-        specifier: workspace:*
-        version: link:../test-utils
-      '@types/pg':
-        specifier: 8.23.1
-        version: 8.23.1
-      auth:
-        specifier: 1.7.6
-        version: 1.7.6(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.3)(pg@8.23.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
 
   packages/contract:
     dependencies:
@@ -371,6 +367,9 @@ importers:
       fast-check:
         specifier: 4.10.2
         version: 4.10.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.6)(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
   packages/platform:
     dependencies:
@@ -380,6 +379,10 @@ importers:
       zod:
         specifier: 4.6.5
         version: 4.6.5
+    devDependencies:
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.6)(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
   packages/test-utils:
     dependencies:
@@ -557,6 +560,14 @@ packages:
   '@babel/types@7.29.8':
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
+
+  '@better-auth/api-key@1.7.6':
+    resolution: {integrity: sha512-BDoi3iUZpUioB3bSdzOZ7Nd9850vv5zFu0QxlZma9nwgMcNtUNsO0ky9toeDFY2h5vxNpdaIVBDRKUJ31RSCDg==}
+    peerDependencies:
+      '@better-auth/core': ^1.7.6
+      '@better-auth/utils': 0.4.2
+      better-auth: ^1.7.6
+      better-call: 1.4.0
 
   '@better-auth/core@1.7.6':
     resolution: {integrity: sha512-yBDDO0J4VCHT1qEZtzj6aMexX4etyLesitoxehcWHzPrzYqrFHwe/hgskye+imlGhQVOysuljMg8M8BA6GrtIg==}
@@ -3086,6 +3097,14 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
+
+  '@better-auth/api-key@1.7.6(@better-auth/core@1.7.6(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.3))(@better-auth/utils@0.4.2)(better-auth@1.7.6(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(pg@8.23.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(better-call@1.4.0(zod@4.6.5))':
+    dependencies:
+      '@better-auth/core': 1.7.6(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.3)
+      '@better-auth/utils': 0.4.2
+      better-auth: 1.7.6(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(pg@8.23.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      better-call: 1.4.0(zod@4.6.5)
+      zod: 4.6.5
 
   '@better-auth/core@1.7.6(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.3)':
     dependencies:

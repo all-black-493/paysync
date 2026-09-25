@@ -24,6 +24,7 @@
     "@paysync/test-utils": "workspace:*",
     "@types/pg": "8.23.1",
     "drizzle-kit": "0.31.11",
-    "fast-check": "4.10.2"
+    "fast-check": "4.10.2",
+    "vitest": "4.1.11"
   }
 }

@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import type { Auth } from '@paysync/auth'
+import type { Auth } from './auth.js'
 import { checkMigrations, type Db, type Migration, type Pool } from '@paysync/db'
 import { createHealthRoutes, type HealthRoutes, type Logger } from '@paysync/platform'
 import { ERROR_STATUS } from '@paysync/contract'
@@ -46,7 +46,17 @@ export function openApiGenerator() {
 
 export function generateSpec(): ReturnType<OpenAPIGenerator['generate']> {
   return openApiGenerator().generate(router, {
-    base: { info: { title: 'Paysync API', version: '1.0.0' }, servers: [{ url: '/api' }] },
+    base: {
+      info: { title: 'Paysync API', version: '1.0.0' },
+      servers: [{ url: '/api' }],
+      components: {
+        securitySchemes: {
+          apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key', description: 'Integrator API key (REST only).' },
+          session: { type: 'apiKey', in: 'cookie', name: 'paysync.session_token', description: 'Web session.' },
+        },
+      },
+      security: [{ apiKey: [] }, { session: [] }],
+    },
     errorStatusMap,
   })
 }
@@ -109,6 +119,12 @@ export function createApiServer(deps: ApiServerDeps): ApiServer {
     if (health.handle(req, res)) return
     const path = (req.url ?? '').split('?', 1)[0] ?? ''
 
+    // Keys are issued only through apiKeys.create, which fixes their permissions.
+    if (path.startsWith('/api/auth/api-key/')) {
+      res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ status: 'not_found' }))
+      return
+    }
     if (path.startsWith('/api/auth/')) {
       await authHandler(req, res)
       return

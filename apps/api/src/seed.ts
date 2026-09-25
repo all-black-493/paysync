@@ -1,5 +1,6 @@
 import { inspect } from 'node:util'
-import { createAuth, type Auth, type RoleName } from '@paysync/auth'
+import type { RoleName } from '@paysync/auth'
+import { createAuth, type Auth } from './auth.js'
 import { allocate, createDb, createPool, schema, withOrg, type Db } from '@paysync/db'
 import { ConfigError, DATABASE_SECRETS, commonEnvShape, createLogger, databaseEnvShape, loadConfig } from '@paysync/platform'
 import { eq } from 'drizzle-orm'

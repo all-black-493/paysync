@@ -8,15 +8,35 @@
       "url": "/api"
     }
   ],
-  "openapi": "3.2.0",
   "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Integrator API key (REST only)."
+      },
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "paysync.session_token",
+        "description": "Web session."
+      }
+    },
     "schemas": {
       "Me": {
         "type": "object",
         "properties": {
-          "user": {
+          "actor": {
             "type": "object",
             "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "api_key"
+                ]
+              },
               "id": {
                 "type": "string"
               },
@@ -24,12 +44,20 @@
                 "type": "string"
               },
               "email": {
-                "type": "string",
-                "format": "email",
-                "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
+              "type",
               "id",
               "name",
               "email"
@@ -57,11 +85,12 @@
             "additionalProperties": false
           },
           "role": {
-            "type": "string"
+            "type": "string",
+            "description": "Organization role for users; \"api_key:read\" or \"api_key:write\" for integrator keys."
           }
         },
         "required": [
-          "user",
+          "actor",
           "organization",
           "role"
         ],
@@ -623,6 +652,82 @@
         ],
         "additionalProperties": false
       },
+      "ApiKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "read",
+                  "write"
+                ],
+                "description": "read: all read procedures. write: read plus creating/updating expected payments and annotating exceptions. Keys can never approve, void, write off, unmatch or move money."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start": {
+            "description": "First characters of the key, for recognising it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "start",
+          "enabled",
+          "createdAt",
+          "expiresAt",
+          "lastUsedAt"
+        ],
+        "additionalProperties": false
+      },
       "DailySummary": {
         "type": "object",
         "properties": {
@@ -707,12 +812,21 @@
       }
     }
   },
+  "security": [
+    {
+      "apiKey": []
+    },
+    {
+      "session": []
+    }
+  ],
+  "openapi": "3.2.0",
   "paths": {
     "/v1/me": {
       "get": {
         "operationId": "me.get",
         "summary": "Who am I",
-        "description": "Returns the signed-in user, their active organization and their role in it. Every other call is scoped to this organization.",
+        "description": "Returns who is calling (a signed-in user or an integrator API key), the organization every other call is scoped to, and the role or key scope that limits what the caller may do.",
         "tags": [
           "session"
         ],
@@ -1842,6 +1956,308 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/api-keys": {
+      "get": {
+        "operationId": "apiKeys.list",
+        "summary": "List integrator API keys",
+        "description": "Lists the organization’s integrator API keys with their scope and status. The secret key value is never returned here. Requires an owner or admin.",
+        "tags": [
+          "api-keys"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApiKey"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "apiKeys.create",
+        "summary": "Create an integrator API key",
+        "description": "Creates an API key owned by the organization for a system integration, with a read or write scope. The secret is returned exactly once in `key`; store it immediately. A retried request with the same idempotency key returns the key record with `key: null`. Requires an owner or admin.",
+        "tags": [
+          "api-keys"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 64
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "read",
+                      "write"
+                    ],
+                    "description": "read: all read procedures. write: read plus creating/updating expected payments and annotating exceptions. Keys can never approve, void, write off, unmatch or move money."
+                  },
+                  "expiresInDays": {
+                    "default": 90,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 365
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "description": "Unique per logical action. Retrying with the same key returns the original result."
+                  },
+                  "dryRun": {
+                    "default": false,
+                    "description": "Validate and preview the change without writing it.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "scope",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "apiKey": {
+                          "$ref": "#/components/schemas/ApiKey"
+                        },
+                        "key": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "apiKey",
+                        "key"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "dryRun",
+                    "changed",
+                    "result"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This idempotency key was already used for a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IdempotencyConflict"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/api-keys/{id}/revoke": {
+      "post": {
+        "operationId": "apiKeys.revoke",
+        "summary": "Revoke an integrator API key",
+        "description": "Disables an API key immediately; calls made with it fail from then on. Revocation is permanent. Requires an owner or admin.",
+        "tags": [
+          "api-keys"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "description": "Unique per logical action. Retrying with the same key returns the original result."
+                  },
+                  "dryRun": {
+                    "default": false,
+                    "description": "Validate and preview the change without writing it.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "idempotencyKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "$ref": "#/components/schemas/ApiKey"
+                    }
+                  },
+                  "required": [
+                    "dryRun",
+                    "changed",
+                    "result"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This idempotency key was already used for a different request., The record is not in a state that allows this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IdempotencyConflict"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidState"
                     },
                     {
                       "$ref": "#/components/schemas/UndefinedError"

@@ -23,7 +23,8 @@ export default function SignInPage() {
       return
     }
     // Full navigation so the home page starts with a fresh session store.
-    window.location.assign('/')
+    const next = new URLSearchParams(window.location.search).get('next') ?? '/'
+    window.location.assign(next.startsWith('/') && !next.startsWith('//') ? next : '/')
   }
 
   return (

@@ -11,6 +11,7 @@ import {
   toExpectedPayment,
   toTransaction,
 } from './mappers.js'
+import { apiKeyProcedures } from './api-keys.js'
 import { mutate } from './mutate.js'
 import { allocatedByTransaction, paidByExpectedPayment, toBigInt } from './queries.js'
 
@@ -24,10 +25,11 @@ const me = authed.me.get.handler(async ({ context }) => {
     .from(organization)
     .where(eq(organization.id, context.caller.orgId))
   if (!org) throw new Error('active organization disappeared')
+  const { caller } = context
   return {
-    user: { id: context.caller.userId, name: context.caller.name, email: context.caller.email },
+    actor: { type: caller.kind, id: caller.actorId, name: caller.name, email: caller.email },
     organization: org,
-    role: context.caller.role,
+    role: caller.role,
   }
 })
 
@@ -153,7 +155,7 @@ const expectedCreate = authed.expected.create.handler(async ({ context, input, e
             dueDate: input.dueDate,
             description: input.description,
             payerLabel: input.payerLabel,
-            createdBy: context.caller.userId,
+            createdBy: context.caller.actorId,
           })
           .returning()
         if (!row) throw new Error('insert returned no row')
@@ -361,6 +363,7 @@ const dailySummary = authed.reports.dailySummary.handler(async ({ context, input
 )
 
 export const router = os.router({
+  apiKeys: apiKeyProcedures,
   me: { get: me },
   transactions: { list: transactionsList, get: transactionsGet },
   expected: { list: expectedList, get: expectedGet, create: expectedCreate, update: expectedUpdate },

@@ -1,5 +1,5 @@
 import { inspect } from 'node:util'
-import { createAuth } from '@paysync/auth'
+import { createAuth } from './auth.js'
 import { createDb, createPool, loadMigrations } from '@paysync/db'
 import {
   ConfigError,

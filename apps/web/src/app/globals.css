@@ -104,3 +104,8 @@ button:disabled { opacity: 0.6; cursor: progress; }
 @media (max-width: 640px) {
   .table { display: block; overflow-x: auto; }
 }
+
+h2 { font-size: 1.1rem; margin: 0; }
+.stack { display: grid; gap: 12px; }
+select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.secret { display: block; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px dashed var(--border); overflow-wrap: anywhere; }

@@ -7,9 +7,9 @@
     "node": "24.21.0"
   },
   "scripts": {
-    "build": "tsc -b",
-    "typecheck": "tsc -b --force",
-    "lint": "eslint --max-warnings 0 .",
+    "build": "tsc -b tsconfig.json apps/api apps/worker apps/migrate",
+    "typecheck": "tsc -b --force tsconfig.json apps/api apps/worker apps/migrate",
+    "lint": "eslint --max-warnings 0 . && node scripts/check-deps.mjs",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration"

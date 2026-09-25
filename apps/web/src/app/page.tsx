@@ -6,18 +6,21 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ExceptionsPanel } from '../components/exceptions'
 import { ExpectedPanel } from '../components/expected'
+import { SettingsPanel } from '../components/settings'
 import { TransactionsPanel } from '../components/transactions'
 import { authClient } from '../lib/auth-client'
 import { formatKes, todayInNairobi } from '../lib/format'
 import { orpc } from '../lib/orpc'
 
-type Tab = 'exceptions' | 'expected' | 'transactions'
+type Tab = 'exceptions' | 'expected' | 'transactions' | 'settings'
 
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ['exceptions', 'Exceptions'],
   ['expected', 'Expected payments'],
   ['transactions', 'Transactions'],
 ]
+
+const ADMIN_ROLES = new Set(['owner', 'admin'])
 
 export default function HomePage() {
   const router = useRouter()
@@ -38,7 +41,7 @@ function Workspace() {
   if (me.isPending) return <main className="shell muted">Loading…</main>
   if (noActiveOrg) return <OrgPicker />
   if (me.isError) return <main className="shell error">Could not load your workspace.</main>
-  return <Dashboard role={me.data.role} orgName={me.data.organization.name} userName={me.data.user.name} />
+  return <Dashboard role={me.data.role} orgName={me.data.organization.name} userName={me.data.actor.name} />
 }
 
 function OrgPicker() {
@@ -71,6 +74,8 @@ function Dashboard({ role, orgName, userName }: { role: string; orgName: string;
   const router = useRouter()
   const queryClient = useQueryClient()
   const canWrite = role !== 'viewer'
+  const isAdmin = role.split(',').some((r) => ADMIN_ROLES.has(r.trim()))
+  const tabs: ReadonlyArray<readonly [Tab, string]> = isAdmin ? [...TABS, ['settings', 'Settings']] : TABS
 
   return (
     <div className="shell">
@@ -109,7 +114,7 @@ function Dashboard({ role, orgName, userName }: { role: string; orgName: string;
       <Summary />
 
       <nav className="tabs" aria-label="Sections">
-        {TABS.map(([t, label]) => (
+        {tabs.map(([t, label]) => (
           <button
             key={t}
             type="button"
@@ -126,6 +131,7 @@ function Dashboard({ role, orgName, userName }: { role: string; orgName: string;
       {tab === 'exceptions' ? <ExceptionsPanel canWrite={canWrite} /> : null}
       {tab === 'expected' ? <ExpectedPanel canWrite={canWrite} /> : null}
       {tab === 'transactions' ? <TransactionsPanel /> : null}
+      {tab === 'settings' && isAdmin ? <SettingsPanel /> : null}
     </div>
   )
 }

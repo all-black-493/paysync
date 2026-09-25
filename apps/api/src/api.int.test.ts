@@ -58,7 +58,7 @@ describe('authentication', () => {
 
   it('signs the user into their own organization with their role', async () => {
     expect(await rpcClient(api, cookie('ownerA')).me.get()).toMatchObject({
-      user: { email: users.ownerA.email },
+      actor: { type: 'user', email: users.ownerA.email },
       organization: { id: orgA, name: 'Acme' },
       role: 'owner',
     })

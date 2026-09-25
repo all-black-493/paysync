@@ -8,15 +8,5 @@
   "include": [
     "src"
   ],
-  "references": [
-    {
-      "path": "../platform"
-    },
-    {
-      "path": "../db"
-    },
-    {
-      "path": "../test-utils"
-    }
-  ]
+  "references": []
 }

@@ -2,6 +2,8 @@ import { oc } from '@orpc/contract'
 import { openapi } from '@orpc/openapi'
 import { z } from 'zod'
 import {
+  ApiKey,
+  ApiKeyScope,
   Cursor,
   DailySummary,
   DryRun,
@@ -75,7 +77,7 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
           tags: ['session'],
           summary: 'Who am I',
           description:
-            'Returns the signed-in user, their active organization and their role in it. Every other call is scoped to this organization.',
+            'Returns who is calling (a signed-in user or an integrator API key), the organization every other call is scoped to, and the role or key scope that limits what the caller may do.',
         }),
       )
       .output(Me),
@@ -309,6 +311,68 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
           .strict(),
       )
       .output(page(Match)),
+  },
+
+  apiKeys: {
+    list: base
+      .meta(
+        openapi({
+          method: 'GET',
+          path: '/api-keys',
+          tags: ['api-keys'],
+          summary: 'List integrator API keys',
+          description:
+            'Lists the organization’s integrator API keys with their scope and status. The secret key value is never returned here. Requires an owner or admin.',
+        }),
+      )
+      .output(z.object({ items: z.array(ApiKey) }).strict()),
+
+    create: mutation
+      .meta(
+        openapi({
+          method: 'POST',
+          path: '/api-keys',
+          tags: ['api-keys'],
+          summary: 'Create an integrator API key',
+          description:
+            'Creates an API key owned by the organization for a system integration, with a read or write scope. The secret is returned exactly once in `key`; store it immediately. A retried request with the same idempotency key returns the key record with `key: null`. Requires an owner or admin.',
+        }),
+      )
+      .input(
+        z
+          .object({
+            name: z.string().trim().min(3).max(64),
+            scope: ApiKeyScope,
+            expiresInDays: z.number().int().min(1).max(365).default(90),
+            idempotencyKey: IdempotencyKey,
+            dryRun: DryRun,
+          })
+          .strict(),
+      )
+      .output(
+        z
+          .object({
+            dryRun: z.boolean(),
+            changed: z.boolean(),
+            result: z.object({ apiKey: ApiKey, key: z.string().nullable() }).strict(),
+          })
+          .strict(),
+      ),
+
+    revoke: mutation
+      .errors({ INVALID_STATE: errors.INVALID_STATE })
+      .meta(
+        openapi({
+          method: 'POST',
+          path: '/api-keys/{id}/revoke',
+          tags: ['api-keys'],
+          summary: 'Revoke an integrator API key',
+          description:
+            'Disables an API key immediately; calls made with it fail from then on. Revocation is permanent. Requires an owner or admin.',
+        }),
+      )
+      .input(z.object({ id: z.string().min(1).max(64), idempotencyKey: IdempotencyKey, dryRun: DryRun }).strict())
+      .output(z.object({ dryRun: z.boolean(), changed: z.boolean(), result: ApiKey }).strict()),
   },
 
   reports: {

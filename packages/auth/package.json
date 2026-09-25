@@ -14,16 +14,6 @@
     "!dist/**/*.test.*"
   ],
   "dependencies": {
-    "@better-auth/drizzle-adapter": "1.7.6",
-    "@paysync/db": "workspace:*",
-    "@paysync/platform": "workspace:*",
-    "better-auth": "1.7.6",
-    "drizzle-orm": "0.45.3",
-    "pg": "8.23.0"
-  },
-  "devDependencies": {
-    "@paysync/test-utils": "workspace:*",
-    "@types/pg": "8.23.1",
-    "auth": "1.7.6"
+    "better-auth": "1.7.6"
   }
 }

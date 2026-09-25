@@ -21,6 +21,11 @@ export const PERMISSIONS = {
     annotate: { exception: ['annotate'] },
   },
   matches: { list: { match: ['read'] } },
+  apiKeys: {
+    list: { apiKey: ['read'] },
+    create: { apiKey: ['create'] },
+    revoke: { apiKey: ['delete'] },
+  },
   reports: { dailySummary: { report: ['read'] } },
 } satisfies PermissionMap<Contract>
 

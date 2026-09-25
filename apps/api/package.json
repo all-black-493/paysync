@@ -8,6 +8,8 @@
     "!dist/**/*.test.*"
   ],
   "dependencies": {
+    "@better-auth/api-key": "1.7.6",
+    "@better-auth/drizzle-adapter": "1.7.6",
     "@orpc/contract": "2.0.0-beta.40",
     "@orpc/openapi": "2.0.0-beta.40",
     "@orpc/server": "2.0.0-beta.40",
@@ -18,10 +20,14 @@
     "@paysync/platform": "workspace:*",
     "better-auth": "1.7.6",
     "drizzle-orm": "0.45.3",
+    "pg": "8.23.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@orpc/client": "2.0.0-beta.40",
-    "@paysync/test-utils": "workspace:*"
+    "@paysync/test-utils": "workspace:*",
+    "@types/pg": "8.23.1",
+    "auth": "1.7.6",
+    "vitest": "4.1.11"
   }
 }

@@ -5,6 +5,19 @@ Newest milestone first.
 
 ---
 
+## M1 follow-up: integrator keys, invite-only sign-up — 2026-09-26
+
+Owner decisions: integrator API keys now (no stubs); sign-up invite-only; every package must declare the third-party modules it imports.
+
+- **Integrator API keys** (§6C.1): Better Auth `@better-auth/api-key`, one config `integrator`, **organization-owned** keys with prefix `psk_`, 90-day default expiry (max 365), 600 requests/minute per key (the plugin's default is 10 per day), no session minting. Keys are created only through `apiKeys.create` (owner/admin), which sets one of two fixed scopes (`INTEGRATOR_SCOPES` in `@paysync/auth`): `read` (all reads) or `write` (reads + create/update expected payments + annotate exceptions). A key can never hold destructive, money, approval or key-management permissions. Calls authorize against the scope intersected with those fixed sets. Keys work on REST only (`x-api-key`), not on the RPC surface. Better Auth's own `/api/auth/api-key/*` routes return 404. The secret is returned once; the idempotency record stores the response with `key: null`. Revoking disables the key. Audit rows record the key as `apikey:<id>`. `me.get` now returns an `actor` (`user` or `api_key`); the OpenAPI document declares both security schemes.
+- **Invite-only sign-up:** a Better Auth `before` hook rejects HTTP `/sign-up/email` unless the email has a pending, unexpired invitation. Trusted server code (seed, tests) calls `auth.api` directly and is not affected. Owners/admins invite from the web Settings tab and share the `/accept-invitation/?id=…` link (no email sender yet); invitees create an account with the invited address and accept. Better Auth enforces that the accepting session's email matches the invitation.
+- **Dependency declarations:** `scripts/check-deps.mjs` (part of `make lint`) fails when any file imports a package its own `package.json` does not declare; runtime files need `dependencies`, tests and tool configs may use `devDependencies`. It found `vitest` used by three packages that relied on the root install; now declared.
+- **TypeScript:** Better Auth's instance type (with the org and API key plugins) is too large for declaration emit (TS7056). The auth instance now lives in `apps/api/src/auth.ts`, and apps are non-composite projects (no declaration files; `tsc -b tsconfig.json apps/*`). `@paysync/auth` keeps roles, permissions and scopes, with explicit `AccessControl`/`Role` annotations so the organization plugin still infers our role names.
+- `auth` schema: default privileges now give `paysync_app` access to future Better Auth tables; `scripts/auth-schema-postprocess.sh` is idempotent.
+- Verified: 99 tests (new: key scopes, RPC refusal, revocation, key cannot manage keys, idempotent create hides the secret, Better Auth key routes closed, sign-up without invitation 403, invited sign-up + accept); browser: key created in Settings, used over REST through the proxy.
+
+---
+
 ## M1: Domain, ledger, contract and auth — done 2026-09-26
 
 ### Done-when evidence
@@ -61,11 +74,6 @@ Newest milestone first.
 - Drizzle covers checks, composite FKs, `pgSchema`, `uuidv7()` defaults and bigint; RLS, triggers and grants live in hand-written SQL, as §6 anticipated.
 - Better Auth's oRPC integration needs no package: middleware calls `auth.api.getSession` with the request headers (`RequestHeadersHandlerPlugin`) and forwards `Set-Cookie` (`ResponseHeadersHandlerPlugin`).
 - Better Auth rate limiting supports `storage: 'database'`.
-
-### Deferred (for the owner)
-
-- **REST integrator API keys** (§6C.1, Better Auth API key plugin): REST works with the session cookie in M1; API keys are not set up yet.
-- **Public sign-up** is enabled (rate limited); the UI only offers sign-in. Should sign-up be invite-only?
 
 ### Next step
 

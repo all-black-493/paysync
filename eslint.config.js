@@ -14,7 +14,7 @@ export default defineConfig(
       globals: globals.node,
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.js', 'vitest.config.ts', 'packages/db/drizzle.config.ts', 'packages/auth/auth.cli.ts', 'apps/web/next.config.ts', 'scripts/web-csp.mjs', '.pnpmfile.mjs'],
+          allowDefaultProject: ['eslint.config.js', 'vitest.config.ts', 'packages/db/drizzle.config.ts', 'apps/api/auth.cli.ts', 'apps/web/next.config.ts', 'scripts/web-csp.mjs', '.pnpmfile.mjs', 'scripts/check-deps.mjs'],
         },
         tsconfigRootDir: import.meta.dirname,
       },
