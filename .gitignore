@@ -1,5 +1,10 @@
 node_modules/
 dist/
+.next/
+apps/web/out/
+apps/web/csp.caddy
+.playwright-mcp/
+next-env.d.ts
 coverage/
 *.tsbuildinfo
 .env

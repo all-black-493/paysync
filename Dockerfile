@@ -15,7 +15,7 @@ COPY package.json ./
 RUN corepack install && pnpm --version
 
 FROM base AS deps
-COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml .pnpmfile.mjs ./
 RUN --mount=type=cache,id=paysync-pnpm-store,target=/pnpm/store \
     pnpm fetch
 
@@ -24,6 +24,8 @@ COPY . .
 RUN --mount=type=cache,id=paysync-pnpm-store,target=/pnpm/store \
     pnpm install --offline --frozen-lockfile
 RUN pnpm build
+RUN NEXT_TELEMETRY_DISABLED=1 pnpm --filter @paysync/web build && \
+    node scripts/web-csp.mjs apps/web/out apps/web/csp.caddy
 RUN --mount=type=cache,id=paysync-pnpm-store,target=/pnpm/store \
     pnpm --filter @paysync/api --prod deploy /out/api && \
     pnpm --filter @paysync/worker --prod deploy /out/worker && \
@@ -76,7 +78,8 @@ CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile
 
 FROM caddy-base AS web
 COPY docker/web/Caddyfile /etc/caddy/Caddyfile
-COPY apps/web/public /srv
+COPY --from=build /repo/apps/web/out /srv
+COPY --from=build /repo/apps/web/csp.caddy /etc/caddy/csp.caddy
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
   CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
 

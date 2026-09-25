@@ -5,6 +5,74 @@ Newest milestone first.
 
 ---
 
+## M1: Domain, ledger, contract and auth — done 2026-09-26
+
+### Done-when evidence
+
+| Check | How it was verified | Result |
+|---|---|---|
+| Ledger property tests pass | fast-check: every balanced journal accepted, any single-line change rejected; allocation sequences never exceed the amount and the remainder stays explicit; 30 random journals against Postgres (balanced stored, unbalanced rejected at commit) | green |
+| Permission and RLS tests pass | `integrity.int.test.ts` (RLS on read, insert, re-parenting; no org set → no rows; same-org composite FKs) and `api.int.test.ts` (viewer 403, clerk allowed, other org 404, cannot switch into a non-member org) | green |
+| A user signs in and sees only their org | API tests over real Better Auth sign-in; manual browser run through Caddy: Acme clerk sees Acme only, Beta owner sees Beta only | done |
+| Same procedure from the typed client and via REST | Tests create via RPC and read via REST (identical body) and the reverse; curl through the proxy returns the same list on `/api/rpc/expected/list` and `/api/v1/expected-payments` | done |
+| Whole suite | `make test` 88 passed; `make lint`, `make typecheck`, `make verify-images` (23 checks), `make smoke`, `make scan` (0 fixable CRITICAL) | green |
+
+### What exists
+
+- **Schema** (Drizzle, `packages/db/src/schema`): `core` (shortcode, expected_payment, mpesa_transaction, match, allocation, exception), `ledger` (account, journal, entry), `ingest.inbound_event`, `audit.event`, `agent.idempotency_record`, and Better Auth's tables in `auth`.
+- **Hand-written migration** `…_tenancy_and_integrity.sql`: grants, RLS, append-only triggers, deferred ledger-balance and allocation checks, match transitions, version bumps.
+- **Helpers** (`@paysync/db`): `withOrg` (the only query path; serializable retry), `postJournal` (idempotent), `allocate` (row lock + pure `planAllocation`).
+- **`@paysync/auth`**: Better Auth 1.7.6 (email/password, database rate limiting, organizations, roles in `permissions.ts`).
+- **`@paysync/contract`** and the api: `/api/auth/*` Better Auth, `/api/rpc/*` typed client, `/api/v1/*` REST, `/api/v1/docs` Scalar (only when `API_DOCS=on` and not production).
+- **`apps/web`**: Next.js 16 static export (sign-in, org picker, today's totals, exceptions with notes, expected payments with a create form, transactions).
+- **Make targets:** `seed`, `auth-schema`, `snapshots` (plus `db-generate` / `db-migration`).
+
+### Decisions and deviations
+
+1. **Contract scope.** M1 ships `me.get`, `transactions.list/get`, `expected.list/get/create/update`, `exceptions.list/get/annotate`, `matches.list` and `reports.dailySummary`. Not yet in the contract, rather than stubbed: `matches.suggest` and `matches.confirm` (M4, need the matching engine), `reconciliation.run` (M9), and the destructive procedures (M5, need approvals). `dailySummary` has no `variance` yet; it needs the account-balance check (M3).
+2. **Money on the wire** is `{ minor: "<integer string>", currency: "KES" }`. BigInt in code, bigint in Postgres, never floats.
+3. **Better Auth tables** come from `make auth-schema` (Better Auth CLI → Drizzle), then `scripts/auth-schema-postprocess.sh` moves them into the `auth` schema and makes timestamps `timestamptz`. The CLI ignores the adapter's `schemaName`. Better Auth keeps its own random text ids, so `org_id` is `text`; our own tables use `uuidv7()`.
+4. **Same-org composite foreign keys** (`(child_id, org_id) → (id, org_id)`) on every tenant-to-tenant reference, so a row can never point at another org's row, even when written by a superuser.
+5. **RLS is `ENABLE`d, not `FORCE`d.** It applies to `paysync_app`; the owner (migrations) is not subject. An unset `app.org_id` returns no rows. The integrity functions are `SECURITY DEFINER` so they see every row.
+6. **Append-only:** `ingest.inbound_event`, `ledger.*`, `audit.event`, `core.allocation` and `agent.idempotency_record` have no UPDATE/DELETE grants, plus row and TRUNCATE triggers (SQLSTATE `PSA01`) that also stop the superuser. Matches cannot be deleted and only move `active → unmatched`. Unmatching makes their allocations stop counting.
+7. **Commit-time checks** (deferred constraint triggers, SQLSTATE 23514 with named constraints): `ledger_journal_balanced` (≥ 2 lines, sum 0) and `core_allocation_within_amount`.
+8. **Optimistic concurrency** is enforced in the database: every update to a mutable row must bump `version` by one (`PSV01`), and handlers return `STALE_STATE { currentVersion }`.
+9. **Writes** (`mutate()` in the api): idempotency record per `(org, key)` with a request hash (same key + different request → `IDEMPOTENCY_CONFLICT`), stored in the same transaction as the change; `dryRun` runs the real SQL, forces deferred constraints (`SET CONSTRAINTS ALL IMMEDIATE`), then rolls back; one `audit.event` per committed write, with `payerLabel` redacted.
+10. **Authorization:** the org always comes from the Better Auth session. The role comes from `auth.member` on every call and is checked against `PERMISSIONS`, which the compiler forces to cover every contract procedure; an unmapped path throws (fail closed). Roles: viewer reads; clerk also creates/updates/annotates and may *request* destructive actions (those will need approval in M5); accountant adds `approval:approve` and `reversal:request`; admin/owner add member management.
+11. **Better Auth clears the active organization** when a user tries to switch to an org they don't belong to (its `crud-org.mjs`). Calls then return FORBIDDEN until they pick again, and the web app shows an org picker. This is fail closed, so kept.
+12. **Rate limiting** is Better Auth's database storage (works across replicas), keyed on `x-forwarded-for`. Verified that Caddy drops a client-supplied `X-Forwarded-For`: a forged address was not recorded.
+13. **Hardening on the oRPC handlers:** CORS pinned to `PUBLIC_URL` with credentials, 1 MB body limit, prototype-pollution protection, GET CSRF protection on REST (RPC is POST-only), strict input objects (unknown keys → 400).
+14. **Web security:** the static export's inline bootstrap scripts are allowed by **hash** (`scripts/web-csp.mjs` writes the CSP at build time), not `'unsafe-inline'`. Caddy uses `try_files {path} {path}index.html …` for trailing-slash routes. Sign-in does a full navigation so the session store isn't stale.
+15. **Supply chain:** `.pnpmfile.mjs` strips Better Auth's optional peers on dev/framework tooling. Before this, pnpm bound them into its resolution and `pnpm deploy --prod` shipped vitest, drizzle-kit and three esbuild Go binaries (two critical Go stdlib CVEs) in the api image. `verify-images` and Trivy caught it. `allowBuilds` now denies `esbuild` and `sharp` explicitly.
+16. **`make up` / `make smoke` build first, then `up`.** With `up --build` in one step, Compose kept the old `web` container after rebuilding its image.
+17. **Snapshots:** the generated OpenAPI 3.2 document (including every agent-facing description) is committed at `apps/api/src/__snapshots__/openapi.json`; change it only with `make snapshots` and review the diff.
+18. **Seed:** `make seed` (refuses with `NODE_ENV=production`, safe to re-run) creates Acme Rentals (owner, accountant, clerk, viewer) and Beta Academy (owner, clerk) with `@acme.test` / `@beta.test` emails, password `paysync-dev-password` (dev only; override with `SEED_PASSWORD`). The data includes a payer reference containing a prompt-injection string on purpose.
+
+### Doc discrepancies and facts found
+
+- **oRPC v2:** typed error definitions have no `status`; HTTP statuses come from `errorStatusMap` on the OpenAPI handler and generator (`ERROR_STATUS` in the contract keeps both in sync). `.route({...})` from §8.2 is `.meta(openapi({...}))` in v2. `ORPCError` has no `status` property. `onError` must be created inline so its types infer.
+- **oRPC:** the server validates input and output against the contract by itself; the Request/Response Validation plugins are client-side (resolves the M0 note).
+- **Better Auth 1.7:** the Drizzle adapter is `@better-auth/drizzle-adapter`; the CLI is the `auth` package; `getSession({ returnHeaders: true })` returns refreshed cookies, which we forward.
+- **Drizzle 0.45:** `.for('update', { of: table })` renders a schema-qualified name, which Postgres rejects; we lock with a separate plain `SELECT … FOR UPDATE`.
+- **Node `fetch`** drops `Sec-Fetch-*` request headers; the CSRF test uses `node:http`.
+
+### [VERIFY] items settled in M1
+
+- Drizzle covers checks, composite FKs, `pgSchema`, `uuidv7()` defaults and bigint; RLS, triggers and grants live in hand-written SQL, as §6 anticipated.
+- Better Auth's oRPC integration needs no package: middleware calls `auth.api.getSession` with the request headers (`RequestHeadersHandlerPlugin`) and forwards `Set-Cookie` (`ResponseHeadersHandlerPlugin`).
+- Better Auth rate limiting supports `storage: 'database'`.
+
+### Deferred (for the owner)
+
+- **REST integrator API keys** (§6C.1, Better Auth API key plugin): REST works with the session cookie in M1; API keys are not set up yet.
+- **Public sign-up** is enabled (rate limited); the UI only offers sign-in. Should sign-up be invite-only?
+
+### Next step
+
+M2 (Daraja ingestion, sandbox): waiting for the owner's go-ahead.
+
+---
+
 ## M0: Skeleton (Docker-first) — done 2026-09-25
 
 ### Done-when evidence
@@ -119,6 +187,3 @@ Still open (owner will decide later): what M2's "exactly one **verified** transa
 
 - `make db-dump` / `make db-restore` ran as root inside the db container, which peer auth rejects. They now run as `postgres`; dump → restore verified.
 
-### Next step
-
-M1 (Domain + ledger + contract): waiting for the owner's go-ahead.

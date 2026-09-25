@@ -156,3 +156,9 @@ export const Me = z
   })
   .strict()
   .meta({ id: 'Me' })
+
+export type TransactionOutput = z.output<typeof Transaction>
+export type ExpectedPaymentOutput = z.output<typeof ExpectedPayment>
+export type ExceptionOutput = z.output<typeof ReconException>
+export type MatchOutput = z.output<typeof Match>
+export type DailySummaryOutput = z.output<typeof DailySummary>

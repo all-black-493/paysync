@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', 'apps/web/public/**', 'data/**', 'skills/**'],
+    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/.next/**', 'apps/web/out/**', '**/next-env.d.ts', 'data/**', 'skills/**'],
   },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
@@ -14,7 +14,7 @@ export default defineConfig(
       globals: globals.node,
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.js', 'vitest.config.ts', 'packages/db/drizzle.config.ts', 'packages/auth/auth.cli.ts'],
+          allowDefaultProject: ['eslint.config.js', 'vitest.config.ts', 'packages/db/drizzle.config.ts', 'packages/auth/auth.cli.ts', 'apps/web/next.config.ts', 'scripts/web-csp.mjs', '.pnpmfile.mjs'],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -35,7 +35,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['**/*.js'],
+    files: ['**/*.js', '**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
   },
 )

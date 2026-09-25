@@ -29,7 +29,8 @@ bootstrap: .env secrets
 
 .PHONY: up
 up: bootstrap ## Build and start every service; waits until all are healthy
-	$(COMPOSE) up --build --detach --wait
+	$(COMPOSE) build
+	$(COMPOSE) up --detach --wait
 
 .PHONY: dev
 dev: bootstrap ## Start with `compose watch` (rebuild on change)
@@ -76,6 +77,10 @@ auth-schema: secrets ## Regenerate the Better Auth Drizzle schema (then: make db
 	  test ./node_modules/.bin/auth generate --config auth.cli.ts --adapter drizzle --dialect postgresql \
 	  --output ../db/src/schema/auth.ts --yes
 	./scripts/auth-schema-postprocess.sh
+
+.PHONY: seed
+seed: bootstrap ## Load demo organizations, users and payments into the dev database (refuses in production)
+	$(COMPOSE) run --rm --no-deps api node dist/seed.js
 
 .PHONY: db-shell
 db-shell: bootstrap ## psql into the dev database as the superuser
@@ -137,7 +142,8 @@ check: lint typecheck test verify-images smoke scan ## Everything CI runs, local
 
 .PHONY: smoke
 smoke: bootstrap ## Production-shaped stack in its own project: probe via proxy, then remove (needs `make down` first)
-	$(SMOKE) up --build --detach --wait
+	$(SMOKE) build
+	$(SMOKE) up --detach --wait
 	@code=0; \
 	curl -fsS -o /dev/null http://127.0.0.1:$${PROXY_PORT:-8080}/ || code=1; \
 	curl -fsS -o /dev/null http://127.0.0.1:$${PROXY_PORT:-8080}/_proxy/health || code=1; \

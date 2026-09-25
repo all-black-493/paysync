@@ -7,3 +7,5 @@ savePrefix: ''
 allowBuilds:
   # The postinstall only checks the platform binary, which pnpm installs as an optional dependency.
   esbuild: false
+  # Only used for image optimization, which the static export disables.
+  sharp: false

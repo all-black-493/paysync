@@ -6,13 +6,13 @@
 :8080 {
 	root * /srv
 	encode zstd gzip
-	try_files {path} /index.html
+	try_files {path} {path}index.html {path}/index.html /index.html
 	file_server
+	import /etc/caddy/csp.caddy
 
 	header {
 		-Server
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
-		Content-Security-Policy "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 	}
 }

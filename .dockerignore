@@ -2,6 +2,8 @@
 .git
 **/node_modules
 **/dist
+**/.next
+apps/web/out
 **/*.tsbuildinfo
 coverage
 .env
