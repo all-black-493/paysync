@@ -1,0 +1,19 @@
+{
+  "name": "@paysync/migrate",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist",
+    "!dist/**/*.test.*"
+  ],
+  "dependencies": {
+    "@paysync/db": "workspace:*",
+    "@paysync/platform": "workspace:*",
+    "zod": "4.6.5",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1"
+  }
+}

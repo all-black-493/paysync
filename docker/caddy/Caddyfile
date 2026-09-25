@@ -1,0 +1,34 @@
+{
+	admin off
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+{$SITE_ADDRESS::8080} {
+	encode zstd gzip
+
+	handle /_proxy/health {
+		respond "ok" 200
+	}
+
+	@api path /api /api/* /mcp /mcp/* /hooks/*
+	handle @api {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		reverse_proxy web:8080
+	}
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

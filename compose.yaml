@@ -1,0 +1,180 @@
+name: paysync
+
+x-node-service: &node-service
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+  restart: unless-stopped
+  stop_grace_period: 30s
+  networks: [internal]
+
+x-db-env: &db-env
+  NODE_ENV: ${NODE_ENV:-production}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_PASSWORD_FILE: /run/secrets/db_password
+
+services:
+  db:
+    image: postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=peer
+      PAYSYNC_DB_NAME: paysync
+    secrets:
+      - postgres_superuser_password
+      - db_migrator_password
+      - db_app_password
+      - db_readonly_password
+    configs:
+      - source: postgresql_conf
+        target: /etc/postgresql/postgresql.conf
+    volumes:
+      - db-data:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d paysync -h 127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    shm_size: 256mb
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 60s
+    networks: [internal]
+
+  migrate:
+    <<: *node-service
+    build: { context: ., target: migrate }
+    image: paysync/migrate:${IMAGE_TAG:-local}
+    restart: "no"
+    environment:
+      <<: *db-env
+      DATABASE_URL: postgres://paysync_migrator@db:5432/paysync
+    secrets:
+      - source: db_migrator_password
+        target: db_password
+    depends_on:
+      db: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+  api:
+    <<: *node-service
+    build: { context: ., target: api }
+    image: paysync/api:${IMAGE_TAG:-local}
+    environment:
+      <<: *db-env
+      DATABASE_URL: postgres://paysync_app@db:5432/paysync
+      DB_POOL_MAX: ${API_DB_POOL_MAX:-10}
+      PORT: 3000
+      NODE_OPTIONS: --max-old-space-size=384
+    secrets:
+      - source: db_app_password
+        target: db_password
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    networks: [internal, edge]
+    deploy:
+      resources:
+        limits: { memory: 512m }
+
+  worker:
+    <<: *node-service
+    build: { context: ., target: worker }
+    image: paysync/worker:${IMAGE_TAG:-local}
+    environment:
+      <<: *db-env
+      DATABASE_URL: postgres://paysync_app@db:5432/paysync
+      DB_POOL_MAX: ${WORKER_DB_POOL_MAX:-10}
+      HEALTH_PORT: 3001
+      NODE_OPTIONS: --max-old-space-size=384
+    secrets:
+      - source: db_app_password
+        target: db_password
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    deploy:
+      resources:
+        limits: { memory: 512m }
+
+  web:
+    build: { context: ., target: web }
+    image: paysync/web:${IMAGE_TAG:-local}
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    networks: [edge]
+    deploy:
+      resources:
+        limits: { memory: 64m }
+
+  proxy:
+    build: { context: ., target: proxy }
+    image: paysync/proxy:${IMAGE_TAG:-local}
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:8080}
+    ports:
+      - "${PROXY_BIND:-127.0.0.1}:${PROXY_PORT:-8080}:8080"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_healthy }
+    networks: [edge]
+    deploy:
+      resources:
+        limits: { memory: 128m }
+
+  psql:
+    image: postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
+    profiles: [tools]
+    entrypoint: ["sh", "-c", "PGPASSWORD=\"$$(cat /run/secrets/postgres_superuser_password)\" exec psql -h db -U postgres -d paysync"]
+    secrets:
+      - postgres_superuser_password
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+
+networks:
+  internal:
+    internal: true
+  edge: {}
+
+volumes:
+  db-data: {}
+
+configs:
+  postgresql_conf:
+    file: ./docker/postgres/postgresql.conf
+
+secrets:
+  postgres_superuser_password:
+    file: ./secrets/postgres_superuser_password
+  db_migrator_password:
+    file: ./secrets/db_migrator_password
+  db_app_password:
+    file: ./secrets/db_app_password
+  db_readonly_password:
+    file: ./secrets/db_readonly_password

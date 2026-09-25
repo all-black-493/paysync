@@ -1,0 +1,37 @@
+services:
+  db:
+    ports:
+      - "127.0.0.1:${DB_DEV_PORT:-5432}:5432"
+    # Internal networks cannot publish ports.
+    networks: [internal, dbdev]
+
+  api:
+    ports:
+      - "127.0.0.1:${API_DEV_PORT:-3000}:3000"
+    develop:
+      watch:
+        - path: ./apps/api
+          action: rebuild
+          ignore: [dist/, node_modules/]
+        - path: ./packages
+          action: rebuild
+          ignore: ["**/dist/", "**/node_modules/"]
+
+  worker:
+    develop:
+      watch:
+        - path: ./apps/worker
+          action: rebuild
+          ignore: [dist/, node_modules/]
+        - path: ./packages
+          action: rebuild
+          ignore: ["**/dist/", "**/node_modules/"]
+
+  web:
+    develop:
+      watch:
+        - path: ./apps/web
+          action: rebuild
+
+networks:
+  dbdev: {}
