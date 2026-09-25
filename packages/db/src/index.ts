@@ -17,3 +17,15 @@ export {
   type MigrationRunResult,
   type MigrationStatus,
 } from './runner.js'
+export { createDb, type Db, type Schema } from './client.js'
+export * as schema from './schema/index.js'
+export { AllocationError, allocate, planAllocation, type AllocateInput, type AllocationPlan } from './allocation.js'
+export {
+  LedgerError,
+  journalProblems,
+  postJournal,
+  type JournalLine,
+  type PostJournalInput,
+  type PostJournalResult,
+} from './ledger.js'
+export { pgConstraint, pgErrorCode, withOrg, type Tx, type WithOrgOptions } from './tenancy.js'

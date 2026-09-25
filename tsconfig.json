@@ -1,11 +1,29 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/platform" },
-    { "path": "packages/db" },
-    { "path": "packages/test-utils" },
-    { "path": "apps/api" },
-    { "path": "apps/worker" },
-    { "path": "apps/migrate" }
+    {
+      "path": "packages/platform"
+    },
+    {
+      "path": "packages/db"
+    },
+    {
+      "path": "packages/test-utils"
+    },
+    {
+      "path": "packages/auth"
+    },
+    {
+      "path": "packages/contract"
+    },
+    {
+      "path": "apps/api"
+    },
+    {
+      "path": "apps/worker"
+    },
+    {
+      "path": "apps/migrate"
+    }
   ]
 }

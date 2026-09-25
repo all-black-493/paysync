@@ -95,3 +95,33 @@ export async function createTestDatabase(options: CreateTestDatabaseOptions = {}
     },
   }
 }
+
+/** Inserts an organization as the superuser (bypasses row-level security). Returns its id. */
+export async function createOrganization(db: TestDatabase, name: string): Promise<string> {
+  const id = `org_${randomBytes(8).toString('hex')}`
+  await db
+    .pool('admin')
+    .query('INSERT INTO auth.organization (id, name, slug, created_at) VALUES ($1, $2, $3, now())', [
+      id,
+      name,
+      `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${id.slice(-6)}`,
+    ])
+  return id
+}
+
+/** Runs `fn` in a transaction scoped to `orgId`, the way withOrg does. */
+export async function asOrg<T>(pool: pg.Pool, orgId: string, fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query("SELECT set_config('app.org_id', $1, true)", [orgId])
+    const result = await fn(client)
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}

@@ -9,6 +9,7 @@ export default defineConfig({
     schema: 'meta',
     table: 'schema_migration',
   },
+  casing: 'snake_case',
   strict: true,
   verbose: true,
 })

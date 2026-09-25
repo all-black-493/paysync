@@ -8,6 +8,20 @@
       "when": 1790370924849,
       "tag": "20260925211524_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790372711514,
+      "tag": "20260925214511_domain_and_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790372758064,
+      "tag": "20260925214558_tenancy_and_integrity",
+      "breakpoints": true
     }
   ]
 }

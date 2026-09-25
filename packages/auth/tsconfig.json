@@ -10,19 +10,13 @@
   ],
   "references": [
     {
-      "path": "../../packages/platform"
+      "path": "../platform"
     },
     {
-      "path": "../../packages/db"
+      "path": "../db"
     },
     {
-      "path": "../../packages/test-utils"
-    },
-    {
-      "path": "../../packages/auth"
-    },
-    {
-      "path": "../../packages/contract"
+      "path": "../test-utils"
     }
   ]
 }

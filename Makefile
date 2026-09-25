@@ -69,6 +69,14 @@ db-migration: secrets ## Create an empty hand-written SQL migration: make db-mig
 	@test -n "$(NAME)" || { echo "usage: make db-migration NAME=snake_case_name" >&2; exit 1; }
 	$(DRIZZLE_KIT) generate --custom --name=$(NAME)
 
+.PHONY: auth-schema
+auth-schema: secrets ## Regenerate the Better Auth Drizzle schema (then: make db-generate NAME=...)
+	$(TEST) run --rm --build --no-deps --user "$$(id -u):$$(id -g)" -e HOME=/tmp \
+	  -v "$(CURDIR)/packages/db/src/schema:/repo/packages/db/src/schema" -w /repo/packages/auth \
+	  test ./node_modules/.bin/auth generate --config auth.cli.ts --adapter drizzle --dialect postgresql \
+	  --output ../db/src/schema/auth.ts --yes
+	./scripts/auth-schema-postprocess.sh
+
 .PHONY: db-shell
 db-shell: bootstrap ## psql into the dev database as the superuser
 	$(COMPOSE) --profile tools run --rm psql

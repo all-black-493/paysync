@@ -1,5 +1,5 @@
 {
-  "name": "@paysync/db",
+  "name": "@paysync/auth",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,19 +11,18 @@
   },
   "files": [
     "dist",
-    "!dist/**/*.test.*",
-    "migrations"
+    "!dist/**/*.test.*"
   ],
   "dependencies": {
+    "@better-auth/drizzle-adapter": "1.7.6",
+    "@paysync/db": "workspace:*",
     "@paysync/platform": "workspace:*",
-    "drizzle-orm": "0.45.3",
-    "pg": "8.23.0",
-    "zod": "4.6.5"
+    "better-auth": "1.7.6",
+    "pg": "8.23.0"
   },
   "devDependencies": {
     "@paysync/test-utils": "workspace:*",
     "@types/pg": "8.23.1",
-    "drizzle-kit": "0.31.11",
-    "fast-check": "4.10.2"
+    "auth": "1.7.6"
   }
 }
