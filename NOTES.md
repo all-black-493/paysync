@@ -110,7 +110,10 @@ None yet (M2).
 - **Migrations:** drizzle-kit, with **Drizzle 0.45** (see decision 2).
 - **Git remote:** `https://github.com/all-black-493/paysync.git` (also the OCI `image.source` label).
 
-Still open: TypeSafe JS SDK vs raw HTTP (M6), and M2's "verified" meaning vs M3 verification.
+- **Jev access:** the official **TypeSafe JS SDK** (`@typesafe-ai/sdk`, 0.6.0 on 2026-09-26), wrapped by `packages/decisions` as the only importer (§3.4). Pin the exact version when M6 starts.
+- **Git push:** this machine's git `store` credentials belong to another GitHub account; push with `git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push` (uses the active `gh` account, all-black-493).
+
+Still open (owner will decide later): what M2's "exactly one **verified** transaction per receipt" means, given verification (§5.4) is M3.
 
 ### Fixes after M0
 
