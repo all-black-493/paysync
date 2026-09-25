@@ -4,4 +4,6 @@ packages:
 
 savePrefix: ''
 
-allowBuilds: {}
+allowBuilds:
+  # The postinstall only checks the platform binary, which pnpm installs as an optional dependency.
+  esbuild: false

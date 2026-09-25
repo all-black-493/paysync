@@ -24,10 +24,10 @@ Newest milestone first.
 ### What exists
 
 - **Workspace:** pnpm 12.6.0 (hash-pinned `packageManager`), TypeScript project references (packages `composite`, apps reference them, per oRPC Monorepo Setup recipe), `strict` + `noUncheckedIndexedAccess`.
-- **Packages:** `platform` (Zod config + `*_FILE` secrets, Pino logger with redaction, `/healthz` + `/readyz`, graceful shutdown), `db` (pool, forward-only migration runner, baseline migration), `test-utils` (per-file DB cloned from the migrated template).
+- **Packages:** `platform` (Zod config + `*_FILE` secrets, Pino logger with redaction, `/healthz` + `/readyz`, graceful shutdown), `db` (pool, drizzle-kit migrations with a guarded runner, baseline migration), `test-utils` (per-file DB cloned from the migrated template).
 - **Apps:** `api` (health routes only; oRPC mounts here in M1), `worker` (health + DB readiness; graphile-worker in M3), `migrate` (one-shot), `web` (static placeholder).
 - **Docker:** one multi-stage `Dockerfile` (base → deps → build → api/worker/migrate/dev; caddy-base → web/proxy), `compose.yaml`, `compose.override.yaml`, `compose.test.yaml`, Postgres 18.6 with roles from `docker/postgres/init`.
-- **Make targets:** `up dev down logs ps build migrate db-shell db-reset db-dump db-restore test test-integration test-unit lint typecheck verify-images smoke scan sbom check lock simulate* bench* clean` (*stubs that fail with "not implemented yet").
+- **Make targets:** `up dev down logs ps build migrate db-generate db-migration db-shell db-reset db-dump db-restore test test-integration test-unit lint typecheck verify-images smoke scan sbom check lock simulate* bench* clean` (*stubs that fail with "not implemented yet").
 
 ### Pinned versions (2026-09-25)
 
@@ -45,6 +45,7 @@ Newest milestone first.
 | Zod | 4.6.5 | Check oRPC v2's Zod integration requirement in M1 |
 | pg / @types/pg | 8.23.0 / 8.23.1 | |
 | Pino | 10.3.1 | |
+| drizzle-orm / drizzle-kit | 0.45.3 / 0.31.11 | Owner chose 0.45 over the 1.0 rc; kit 0.31 is the matching stable line |
 | @types/node | 24.13.6 | Matches Node 24 |
 
 GitHub Actions are pinned by commit SHA: checkout v7.0.1, setup-buildx v4.4.1, upload-artifact v7.0.1.
@@ -52,7 +53,11 @@ GitHub Actions are pinned by commit SHA: checkout v7.0.1, setup-buildx v4.4.1, u
 ### Decisions and deviations from AGENTS.md
 
 1. **Extra packages `platform` and `test-utils`** (not in §10). `platform` holds config, logging, health and shutdown code that api, worker and migrate all need. `test-utils` is a devDependency only and never ships.
-2. **Custom migration runner** (~120 lines in `packages/db/src/runner.ts`) instead of a library. It is forward-only, stores sha256 checksums (an edited applied migration stops the run), takes an advisory lock, does `SET ROLE paysync_owner` so objects are owner-owned, and supports a `-- paysync:no-transaction` first-line marker for `CREATE INDEX CONCURRENTLY`. State lives in `meta.schema_migration`. §6B.7 names no tool, so **owner: confirm or pick another** (see questions).
+2. **Migrations: drizzle-kit** (owner decision, 2026-09-26). `make db-generate NAME=x` diffs the Drizzle schema (`packages/db/src/schema`); `make db-migration NAME=x` creates an empty file for hand-written SQL (constraints, triggers, roles, RLS). Both run drizzle-kit in the `dev` image as the host user, with only `packages/db/migrations` mounted. Every generated file is reviewed like hand-written SQL. At runtime `migrate` uses drizzle-orm's `migrate()`, wrapped (`packages/db/src/runner.ts`) to add what drizzle lacks (read from the 0.45.3 source):
+   - it does not detect edited migrations → we compare stored hashes and refuse;
+   - it silently **skips** a migration older than the newest applied one (merged branches) → we refuse and ask for regeneration;
+   - advisory lock, `SET ROLE paysync_owner`, and read grants on `meta.schema_migration` for readiness.
+   Limits: drizzle applies all pending migrations in **one transaction**, so `CREATE INDEX CONCURRENTLY` cannot go through it. When first needed, add a separate non-transactional step and log it here. File names are `YYYYMMDDHHMMSS_name.sql` (drizzle `prefix: 'timestamp'`, UTC), not the 12-digit form in §6B.7.
 3. **DATABASE_URL carries no password.** The password comes from `DATABASE_PASSWORD_FILE`. Found in testing: node-postgres lets `connectionString` override an explicit `password`, so the URL is split into host/port/user/database (`databaseConnectionParams`). Query parameters are rejected for now so nothing (e.g. `sslmode`) is silently ignored; TLS options come with managed Postgres in M11.
 4. **`make test` uses `docker compose run`,** not `up --abort-on-container-exit --exit-code-from test` (§6A.5). `--exit-code-from` implies abort-on-exit, and the one-shot `migrate` exiting 0 would abort the run. `run` returns the test container's exit code. On failure the Makefile prints the `migrate` logs.
 5. **Every test/smoke Compose call has its own `-p` project.** Found while simulating the clean clone: with `COMPOSE_PROJECT_NAME` set, `make test`'s `down --volumes` tore down the dev stack. `-p` beats the env var, and I verified the dev stack survives even with `COMPOSE_PROJECT_NAME=paysync`.
@@ -65,7 +70,7 @@ GitHub Actions are pinned by commit SHA: checkout v7.0.1, setup-buildx v4.4.1, u
 12. **Runtime images** have npm, npx, corepack and yarn removed. App files are root-owned and read-only to `node`.
 13. **Trivy runs from a digest-pinned image,** not `aquasecurity/trivy-action` (one less third-party action; that action has had tag-hijack incidents). It fails on **fixable** CRITICALs (`--ignore-unfixed`); without that flag, unfixed base-image CVEs would keep CI permanently red.
 14. **CI does not push images or use a BuildKit layer cache yet.** No registry has been chosen (M11). Every job uses `IMAGE_TAG=<sha>`.
-15. **pnpm 12 downloads a native binary** through its corepack shim, verified against npm registry signatures (`get-pnpm`). The `base` stage runs `pnpm --version` once so later layers never download it. pnpm 11+ defaults: `minimumReleaseAge` of 1 day (brand-new versions are not resolvable), settings only in `pnpm-workspace.yaml`, and `allowBuilds` (empty; no install scripts run).
+15. **pnpm 12 downloads a native binary** through its corepack shim, verified against npm registry signatures (`get-pnpm`). The `base` stage runs `pnpm --version` once so later layers never download it. pnpm 11+ defaults: `minimumReleaseAge` of 1 day (brand-new versions are not resolvable), settings only in `pnpm-workspace.yaml`, and `allowBuilds` (`esbuild: false`: its postinstall only checks the platform binary, which pnpm installs as an optional dependency; drizzle-kit works without it).
 16. **`make typecheck` = `tsc -b --force`** (build and typecheck are the same `tsc -b`). Test files are typechecked too; they compile into `dist` but are excluded from what ships (`files` + checked by `verify-images`).
 
 ### Doc discrepancies and facts found (for later milestones)
@@ -102,7 +107,14 @@ None yet (M2).
 - **Code style:** no noisy comments; comment only a non-obvious *why*.
 - **Daraja sandbox credentials** are in `.env` as `CONSUMER_KEY`, `CONSUMER_SECRET`, `SHORTCODE`, `PASSKEY`. At the start of M2 the three secrets move to `secrets/daraja_*` files (§6A.3); the shortcode stays in `.env` as `DARAJA_SHORTCODE`.
 
-Still open: migration runner choice (custom vs graphile-migrate/drizzle-kit), Drizzle 0.45 vs 1.0 rc, TypeSafe JS SDK vs raw HTTP, git remote URL (OCI source label), and M2's "verified" meaning vs M3 verification.
+- **Migrations:** drizzle-kit, with **Drizzle 0.45** (see decision 2).
+- **Git remote:** `https://github.com/all-black-493/paysync.git` (also the OCI `image.source` label).
+
+Still open: TypeSafe JS SDK vs raw HTTP (M6), and M2's "verified" meaning vs M3 verification.
+
+### Fixes after M0
+
+- `make db-dump` / `make db-restore` ran as root inside the db container, which peer auth rejects. They now run as `postgres`; dump → restore verified.
 
 ### Next step
 

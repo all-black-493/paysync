@@ -1,9 +1,9 @@
 export {
   MIGRATIONS_DIR,
+  MIGRATIONS_SCHEMA,
+  MIGRATIONS_TABLE,
   MigrationFileError,
-  NO_TRANSACTION_MARKER,
   loadMigrations,
-  parseMigration,
   type Migration,
 } from './migrations.js'
 export { createPool, type Pool, type PoolClient, type PoolOptions } from './pool.js'
@@ -12,6 +12,8 @@ export {
   MigrationError,
   checkMigrations,
   runMigrations,
+  verifyHistory,
+  type AppliedMigration,
   type MigrationRunResult,
   type MigrationStatus,
 } from './runner.js'

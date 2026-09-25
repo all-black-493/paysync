@@ -14,7 +14,7 @@ export default defineConfig(
       globals: globals.node,
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.js', 'vitest.config.ts'],
+          allowDefaultProject: ['eslint.config.js', 'vitest.config.ts', 'packages/db/drizzle.config.ts'],
         },
         tsconfigRootDir: import.meta.dirname,
       },

@@ -1,43 +1,93 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { MigrationFileError, NO_TRANSACTION_MARKER, loadMigrations, parseMigration } from './migrations.js'
+import { MigrationFileError, loadMigrations, type Migration } from './migrations.js'
+import { MigrationError, verifyHistory } from './runner.js'
 
-describe('parseMigration', () => {
-  it('accepts YYYYMMDDHHMM_description.sql and hashes the content', () => {
-    const m = parseMigration('202609250000_add_things.sql', 'SELECT 1;')
-    expect(m.id).toBe('202609250000_add_things')
-    expect(m.checksum).toMatch(/^[0-9a-f]{64}$/)
-    expect(m.transactional).toBe(true)
+function migrationsDir(entries: ReadonlyArray<{ tag: string; when: number; sql?: string }>): string {
+  const dir = mkdtempSync(join(tmpdir(), 'migrations-'))
+  mkdirSync(join(dir, 'meta'))
+  const journal = {
+    version: '7',
+    dialect: 'postgresql',
+    entries: entries.map((e, idx) => ({ idx, version: '7', when: e.when, tag: e.tag, breakpoints: true })),
+  }
+  writeFileSync(join(dir, 'meta', '_journal.json'), JSON.stringify(journal))
+  for (const e of entries) writeFileSync(join(dir, `${e.tag}.sql`), e.sql ?? 'SELECT 1;')
+  return dir
+}
+
+describe('loadMigrations', () => {
+  it('loads the committed migrations in order', () => {
+    const migrations = loadMigrations()
+    expect(migrations[0]?.tag).toMatch(/^\d{14}_baseline$/)
+    expect(migrations.map((m) => m.createdAt)).toEqual([...migrations.map((m) => m.createdAt)].sort((a, b) => a - b))
+    for (const m of migrations) expect(m.hash).toMatch(/^[0-9a-f]{64}$/)
   })
 
-  it.each(['20260925_add.sql', '202609250000-add.sql', '202609250000_Add.sql', '202609250000_add.SQL', 'notes.md'])(
-    'rejects bad file name %s',
-    (name) => {
-      expect(() => parseMigration(name, 'SELECT 1;')).toThrow(MigrationFileError)
+  it('hashes file content, so any edit changes the hash', () => {
+    const a = loadMigrations(migrationsDir([{ tag: '20260101000000_a', when: 1, sql: 'SELECT 1;' }]))
+    const b = loadMigrations(migrationsDir([{ tag: '20260101000000_a', when: 1, sql: 'SELECT 1; ' }]))
+    expect(a[0]?.hash).not.toBe(b[0]?.hash)
+  })
+
+  it.each(['0001_add', '20260101000000-add', '20260101000000_Add', '20260101000000_add-things'])(
+    'rejects badly named migration %s',
+    (tag) => {
+      expect(() => loadMigrations(migrationsDir([{ tag, when: 1 }]))).toThrow(MigrationFileError)
     },
   )
 
-  it('rejects empty files', () => {
-    expect(() => parseMigration('202609250000_empty.sql', ' \n')).toThrow(/empty/)
-  })
-
-  it('detects the no-transaction marker on the first line only', () => {
-    const sql = `${NO_TRANSACTION_MARKER}\nCREATE INDEX CONCURRENTLY i ON t (c);`
-    expect(parseMigration('202609250001_idx.sql', sql).transactional).toBe(false)
-    expect(parseMigration('202609250001_idx.sql', `SELECT 1;\n${NO_TRANSACTION_MARKER}`).transactional).toBe(true)
-  })
-
-  it('gives a different checksum for any edit', () => {
-    const a = parseMigration('202609250000_a.sql', 'SELECT 1;')
-    const b = parseMigration('202609250000_a.sql', 'SELECT 1; ')
-    expect(a.checksum).not.toBe(b.checksum)
+  it('rejects entries that are not strictly newer than the previous one', () => {
+    const dir = migrationsDir([
+      { tag: '20260101000000_a', when: 2 },
+      { tag: '20260101000001_b', when: 2 },
+    ])
+    expect(() => loadMigrations(dir)).toThrow(/not newer/)
   })
 })
 
-describe('loadMigrations', () => {
-  it('loads the committed migrations in id order', () => {
-    const ids = loadMigrations().map((m) => m.id)
-    expect(ids.length).toBeGreaterThan(0)
-    expect(ids).toEqual([...ids].sort())
-    expect(ids[0]).toBe('202609250000_baseline')
+describe('verifyHistory', () => {
+  const m = (tag: string, createdAt: number): Migration => ({ tag, createdAt, hash: `hash-${tag}` })
+  const applied = (x: Migration) => ({ hash: x.hash, createdAt: x.createdAt })
+  const one = m('a', 1)
+  const two = m('b', 2)
+  const three = m('c', 3)
+
+  it('accepts a prefix of the history, a full history, and a database that is ahead', () => {
+    expect(() => {
+      verifyHistory([one, two], [])
+    }).not.toThrow()
+    expect(() => {
+      verifyHistory([one, two], [applied(one)])
+    }).not.toThrow()
+    expect(() => {
+      verifyHistory([one, two], [applied(one), applied(two)])
+    }).not.toThrow()
+    expect(() => {
+      verifyHistory([one], [applied(one), applied(two)])
+    }).not.toThrow()
+  })
+
+  it('refuses an applied migration whose file was edited', () => {
+    expect(() => {
+      verifyHistory([one], [{ ...applied(one), hash: 'other' }])
+    }).toThrow(/was changed/)
+  })
+
+  it('refuses a migration drizzle would silently skip', () => {
+    expect(() => {
+      verifyHistory([one, two, three], [applied(one), applied(three)])
+    }).toThrow(MigrationError)
+    expect(() => {
+      verifyHistory([one, two, three], [applied(one), applied(three)])
+    }).toThrow(/b is older/)
+  })
+
+  it('refuses an applied migration that this build no longer has', () => {
+    expect(() => {
+      verifyHistory([one, three], [applied(one), applied(two)])
+    }).toThrow(/does not have/)
   })
 })

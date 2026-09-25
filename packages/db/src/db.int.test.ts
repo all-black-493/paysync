@@ -1,5 +1,8 @@
 import { createLogger, databaseConnectionParams } from '@paysync/platform'
 import { createTestDatabase, type TestDatabase } from '@paysync/test-utils'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import pg from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { loadMigrations } from './migrations.js'
@@ -33,16 +36,17 @@ describe('migrated template', () => {
   })
 
   it('re-running migrations is a no-op', async () => {
-    const result = await asMigrator(db, (c) => runMigrations(c, migrations, logger))
+    const result = await asMigrator(db, (c) => runMigrations(c, logger))
     expect(result.applied).toEqual([])
     expect(result.alreadyApplied).toBe(migrations.length)
   })
 
   it('refuses to run when an applied migration was edited', async () => {
-    const [first] = migrations
-    if (!first) throw new Error('no migrations')
-    const edited = { ...first, checksum: '0'.repeat(64) }
-    await expect(asMigrator(db, (c) => runMigrations(c, [edited], logger))).rejects.toThrow(MigrationError)
+    const admin = db.pool('admin')
+    await admin.query(`UPDATE meta.schema_migration SET hash = repeat('0', 64) WHERE created_at = $1`, [
+      migrations[0]?.createdAt,
+    ])
+    await expect(asMigrator(db, (c) => runMigrations(c, logger))).rejects.toThrow(/was changed/)
   })
 
   it('objects are owned by paysync_owner, not by the login role', async () => {
@@ -55,7 +59,7 @@ describe('migrated template', () => {
   })
 })
 
-describe('paysync_app role (AGENTS.md §6B.2, §6B.4)', () => {
+describe('paysync_app role', () => {
   let db: TestDatabase
   beforeAll(async () => {
     db = await createTestDatabase()
@@ -100,8 +104,36 @@ describe('empty database', () => {
   })
 
   it('migrates from scratch, then reports ready', async () => {
-    const result = await asMigrator(db, (c) => runMigrations(c, migrations, logger))
-    expect(result.applied).toEqual(migrations.map((m) => m.id))
+    const result = await asMigrator(db, (c) => runMigrations(c, logger))
+    expect(result.applied).toEqual(migrations.map((m) => m.tag))
     await expect(checkMigrations(db.pool('app'), migrations)).resolves.toMatchObject({ ok: true })
+  })
+})
+
+describe('a failing migration', () => {
+  let db: TestDatabase
+  beforeAll(async () => {
+    db = await createTestDatabase({ from: 'empty' })
+  })
+  afterAll(async () => {
+    await db.drop()
+  })
+
+  it('rolls back every pending migration in the run', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'migrations-'))
+    mkdirSync(join(dir, 'meta'))
+    const entries = [
+      { tag: '20260101000000_good', when: 1, sql: 'CREATE SCHEMA good;' },
+      { tag: '20260101000001_bad', when: 2, sql: 'CREATE TABLE nowhere.t (id int);' },
+    ]
+    writeFileSync(
+      join(dir, 'meta', '_journal.json'),
+      JSON.stringify({ version: '7', dialect: 'postgresql', entries: entries.map((e, idx) => ({ idx, ...e })) }),
+    )
+    for (const e of entries) writeFileSync(join(dir, `${e.tag}.sql`), e.sql)
+
+    await expect(asMigrator(db, (c) => runMigrations(c, logger, dir))).rejects.toThrow(MigrationError)
+    const { rows } = await db.pool('admin').query(`SELECT 1 FROM pg_namespace WHERE nspname = 'good'`)
+    expect(rows).toEqual([])
   })
 })

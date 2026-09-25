@@ -1,5 +1,5 @@
 import { inspect } from 'node:util'
-import { loadMigrations, runMigrations } from '@paysync/db'
+import { runMigrations } from '@paysync/db'
 import {
   ConfigError,
   DATABASE_SECRETS,
@@ -23,8 +23,7 @@ async function main(): Promise<void> {
   })
   await client.connect()
   try {
-    const migrations = loadMigrations()
-    const result = await runMigrations(client, migrations, logger)
+    const result = await runMigrations(client, logger)
     logger.info({ applied: result.applied, alreadyApplied: result.alreadyApplied }, 'migrations complete')
   } finally {
     await client.end()

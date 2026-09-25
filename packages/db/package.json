@@ -9,13 +9,20 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "!dist/**/*.test.*", "migrations"],
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "migrations"
+  ],
   "dependencies": {
     "@paysync/platform": "workspace:*",
-    "pg": "8.23.0"
+    "drizzle-orm": "0.45.3",
+    "pg": "8.23.0",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@paysync/test-utils": "workspace:*",
-    "@types/pg": "8.23.1"
+    "@types/pg": "8.23.1",
+    "drizzle-kit": "0.31.11"
   }
 }

@@ -1,18 +1,26 @@
-import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readMigrationFiles } from 'drizzle-orm/migrator'
+import { z } from 'zod'
 
-const FILE_PATTERN = /^(\d{12})_([a-z0-9]+(?:_[a-z0-9]+)*)\.sql$/
+export const MIGRATIONS_DIR = fileURLToPath(new URL('../migrations', import.meta.url))
+export const MIGRATIONS_SCHEMA = 'meta'
+export const MIGRATIONS_TABLE = 'schema_migration'
 
-/** First-line marker for single-statement migrations that cannot run in a transaction. */
-export const NO_TRANSACTION_MARKER = '-- paysync:no-transaction'
+const TAG_PATTERN = /^\d{14}_[a-z0-9]+(?:_[a-z0-9]+)*$/
+
+const journalSchema = z.object({
+  dialect: z.literal('postgresql'),
+  entries: z.array(z.object({ idx: z.number().int(), when: z.number().int(), tag: z.string() })),
+})
 
 export interface Migration {
-  readonly id: string
-  readonly sql: string
-  readonly checksum: string
-  readonly transactional: boolean
+  readonly tag: string
+  /** drizzle's `created_at` for this migration (the journal's `when`). */
+  readonly createdAt: number
+  /** sha256 of the file, as drizzle stores it. */
+  readonly hash: string
 }
 
 export class MigrationFileError extends Error {
@@ -22,23 +30,23 @@ export class MigrationFileError extends Error {
   }
 }
 
-export const MIGRATIONS_DIR = fileURLToPath(new URL('../migrations', import.meta.url))
-
-export function parseMigration(fileName: string, sql: string): Migration {
-  const match = FILE_PATTERN.exec(fileName)
-  if (!match) {
-    throw new MigrationFileError(`bad migration file name "${fileName}"; expected YYYYMMDDHHMM_description.sql`)
-  }
-  if (sql.trim() === '') throw new MigrationFileError(`migration ${fileName} is empty`)
-  return {
-    id: fileName.slice(0, -'.sql'.length),
-    sql,
-    checksum: createHash('sha256').update(sql).digest('hex'),
-    transactional: !sql.startsWith(NO_TRANSACTION_MARKER),
-  }
-}
-
 export function loadMigrations(dir: string = MIGRATIONS_DIR): readonly Migration[] {
-  const files = readdirSync(dir).sort()
-  return files.map((file) => parseMigration(file, readFileSync(join(dir, file), 'utf8')))
+  const journal = journalSchema.parse(JSON.parse(readFileSync(join(dir, 'meta', '_journal.json'), 'utf8')))
+  const files = readMigrationFiles({ migrationsFolder: dir })
+
+  let previous = -Infinity
+  return journal.entries.map((entry, index) => {
+    const file = files[index]
+    if (!TAG_PATTERN.test(entry.tag)) {
+      throw new MigrationFileError(`bad migration name "${entry.tag}"; use make db-migration NAME=snake_case`)
+    }
+    if (entry.when <= previous) {
+      throw new MigrationFileError(`migration ${entry.tag} is not newer than the one before it; regenerate it`)
+    }
+    if (file?.folderMillis !== entry.when) {
+      throw new MigrationFileError(`journal and files disagree at ${entry.tag}`)
+    }
+    previous = entry.when
+    return { tag: entry.tag, createdAt: entry.when, hash: file.hash }
+  })
 }

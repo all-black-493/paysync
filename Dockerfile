@@ -41,7 +41,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 ARG VCS_REF=unknown
 ARG VERSION=0.0.0-dev
-LABEL org.opencontainers.image.source="https://github.com/OWNER/paysync" \
+LABEL org.opencontainers.image.source="https://github.com/all-black-493/paysync" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.licenses="UNLICENSED"

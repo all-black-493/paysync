@@ -55,6 +55,20 @@ build: bootstrap ## Build every image
 migrate: bootstrap ## Run pending migrations against the dev database
 	$(COMPOSE) up --build --no-log-prefix --abort-on-container-failure migrate
 
+DRIZZLE_KIT := $(TEST) run --rm --build --no-deps --user "$$(id -u):$$(id -g)" -e HOME=/tmp \
+               -v "$(CURDIR)/packages/db/migrations:/repo/packages/db/migrations" -w /repo/packages/db \
+               test ./node_modules/.bin/drizzle-kit
+
+.PHONY: db-generate
+db-generate: secrets ## Generate a migration from the Drizzle schema diff: make db-generate NAME=add_x
+	@test -n "$(NAME)" || { echo "usage: make db-generate NAME=snake_case_name" >&2; exit 1; }
+	$(DRIZZLE_KIT) generate --name=$(NAME)
+
+.PHONY: db-migration
+db-migration: secrets ## Create an empty hand-written SQL migration: make db-migration NAME=add_x
+	@test -n "$(NAME)" || { echo "usage: make db-migration NAME=snake_case_name" >&2; exit 1; }
+	$(DRIZZLE_KIT) generate --custom --name=$(NAME)
+
 .PHONY: db-shell
 db-shell: bootstrap ## psql into the dev database as the superuser
 	$(COMPOSE) --profile tools run --rm psql
@@ -69,7 +83,7 @@ db-reset: ## Delete the dev database volume and start fresh (refuses in producti
 .PHONY: db-dump
 db-dump: ## pg_dump -Fc of the dev database into backups/
 	@mkdir -p backups
-	$(COMPOSE) exec -T db pg_dump -U postgres -Fc paysync > backups/paysync-$$(date -u +%Y%m%dT%H%M%SZ).dump
+	$(COMPOSE) exec -T -u postgres db pg_dump -U postgres -Fc paysync > backups/paysync-$$(date -u +%Y%m%dT%H%M%SZ).dump
 	@ls -1t backups | head -1
 
 .PHONY: db-restore
@@ -77,7 +91,7 @@ db-restore: ## Restore FILE=backups/x.dump into the dev database (refuses in pro
 	@test -n "$(FILE)" || { echo "usage: make db-restore FILE=backups/x.dump" >&2; exit 1; }
 	@if [ "$${NODE_ENV:-}" = production ] || grep -qs '^NODE_ENV=production' .env; then \
 	  echo "db-restore refused: NODE_ENV=production" >&2; exit 1; fi
-	$(COMPOSE) exec -T db pg_restore -U postgres -d paysync --clean --if-exists --single-transaction < $(FILE)
+	$(COMPOSE) exec -T -u postgres db pg_restore -U postgres -d paysync --clean --if-exists --single-transaction < $(FILE)
 
 .PHONY: test
 test: secrets ## Unit + integration tests against a throwaway Postgres 18
