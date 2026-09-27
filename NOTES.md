@@ -5,6 +5,66 @@ Newest milestone first.
 
 ---
 
+## M2: Daraja ingestion (sandbox) — done 2026-09-28
+
+### Done-when evidence
+
+"Duplicate/out-of-order replay produces exactly one verified transaction per receipt."
+
+| Check | How | Result |
+|---|---|---|
+| One transaction per receipt | `ingest.int.test.ts`: 3 sequential + 8 concurrent duplicate C2B confirmations; confirmation before validation; 5 concurrent duplicate STK success callbacks then the same receipt as a C2B confirmation | 1 transaction per receipt, 1 inbound event per (source, id) |
+| Same, against the running stack | `make simulate` twice: every callback fixture ×3, shuffled, 4 concurrent senders (27 deliveries per run) | all acknowledged; `{RKL51ZDR4F:1, RKL51ZDR5G:1, RKL51ZDR6H:1, NLJ7RT61SV:1}` |
+| Nothing dropped | unknown shortcode, unknown checkout, invalid payload, bad JSON | stored once each in `ingest.unrouted_event`, acknowledged |
+| Not stored → not acknowledged | callback against a database without the schema | HTTP 500, no `ResultCode: 0` |
+| Live sandbox | OAuth, STK push/query, C2B simulate (v1 and v2) called with the owner's sandbox app; `make daraja ARGS="stk-query …"` twice | token fetched once and reused across processes from Postgres (encrypted) |
+| Suite | `make test` 155 passed; lint + dependency check, typecheck, verify-images (23), smoke, scan | green |
+
+**On "verified":** transactions from callbacks are stored as `pending_verification`. The money gate (STK Query / Transaction Status / Pull, §5.4) is M3, and the owner will confirm what "verified" means for M2's done-when. What M2 guarantees now is exactly one transaction per receipt.
+
+### What exists
+
+- `@paysync/daraja` (the only package that talks to Safaricom): `DarajaClient` (OAuth, STK push, STK query, C2B register, C2B simulate), one Zod schema per product, strict amount and EAT timestamp parsing, normalization to our own outcomes, fixtures with provenance, and a replay simulator.
+- Shared OAuth token: `ingest.daraja_token` (AES-256-GCM), refreshed ~5 minutes before expiry under a Postgres **session** advisory lock on a dedicated connection with no open transaction (§6B.5 forbids external calls inside a transaction, so `pg_advisory_xact_lock` from §5.2 is not used). A rejected token triggers one re-read or refresh and a retry.
+- Callback routes `POST /hooks/{c2b/validation|c2b/confirmation|stk}/:secret` (secret compared in constant time; wrong secret → 404; optional `CALLBACK_ALLOWED_IPS`; 64 KB body limit). Routing via `SECURITY DEFINER` functions `ingest.route_shortcode` / `ingest.route_stk_checkout`, then everything else in an org-scoped transaction.
+- Stored first: `ingest.inbound_event` keeps the body verbatim except personal fields (`MSISDN`, names, STK `PhoneNumber`), which are replaced by `{ "$sealed": <ciphertext> }`. Transactions keep payer name and MSISDN as ciphertext; `bill_ref_number` is stored as untrusted text.
+- `ingest.stk_request` records a push before Daraja is called; its callback updates the status and creates the transaction. An amount different from the request raises a high-priority `amount_mismatch` exception.
+- Operator tools: `make simulate`, `make daraja ARGS="…"` (the `daraja` tools service is the only one on the new `egress` network with Daraja secrets), `make tunnel` / `make tunnel-url` (ngrok, sandbox only, token from `secrets/ngrok_authtoken`). `make seed` gives Acme the sandbox shortcodes 174379 and 600984.
+
+### Daraja quirks (sandbox, 2026-09-28)
+
+- OAuth `expires_in` is the **string** `"3599"`; the portal documents a number.
+- Portal: "each [token] request invalidates the previous token", so replicas must share one token (done, see above).
+- STK Query for an unknown `CheckoutRequestID`: HTTP **500**, `errorCode 500.001.1001`, `"The transaction does not Exist"` → our outcome `unknown`, not `failed`.
+- STK Query on a valid id intermittently returns HTTP 500 `500.001.1001` with an **empty** `errorMessage` between successful polls → treated as transient and retried.
+- STK Query returns `ResultCode "4999"` "The transaction is still under processing" (undocumented) → `pending`. A push to the sandbox test number stayed `4999` for many minutes and later resolved to `1032` "Request Cancelled by user." (the docs spell it "cancelled by user").
+- `ResultCode` is a string in STK Query and a number in the STK callback; every product has its own schema.
+- C2B simulate: both `/mpesa/c2b/v1/simulate` and `/v2/simulate` answer `ResponseCode "0"`; the portal gives no URL. We use v2, like register (`/mpesa/c2b/v2/registerurl`, which the portal does document).
+- The portal documents only the **validation** response body (`{"ResultCode":"0","ResultDesc":"Accepted"}`); confirmation and STK callback acknowledgements are undocumented. We answer confirmations with the same body and STK callbacks with `{"ResultCode":0,"ResultDesc":"Accepted"}`. [VERIFY with captured sandbox callbacks.]
+- C2B callbacks carry a **masked** MSISDN (`"2547 ***** 126"`), so it cannot identify a payer (consistent with §4.3).
+- Callback URLs must not contain M-PESA, Safaricom, exe, exec, cmd, SQL or **query**; the sandbox accepts HTTP, production requires HTTPS; tunnels such as ngrok are allowed in the sandbox only. Enforced by `assertCallbackUrl`.
+- STK: `AccountReference` ≤ 12 characters, `TransactionDesc` ≤ 13 (enforced client-side).
+
+### [VERIFY] items settled in M2
+
+- Timestamps (`TransTime`, STK `TransactionDate`) are `YYYYMMDDHHmmss` in EAT; STK sends a JSON number, C2B a string. Both parse to UTC.
+- STK verification route: STK Query returns only a status (no receipt, no amount), so verifying an STK payment = Query `ResultCode "0"` for the CheckoutRequestID **plus** the amount we recorded when initiating it. Input for M3.
+- Result codes differ per product in type (string vs number) and meaning; normalized per product.
+
+### Still to verify (needs a public callback URL)
+
+- Real sandbox **callback** payloads (C2B confirmation/validation, STK success/cancel) to replace the "documented"-provenance fixtures, and the ACK behaviour. Blocked on an ngrok authtoken in `secrets/ngrok_authtoken`; then `make tunnel`, put the URL in `.env` as `CALLBACK_BASE_URL`, `make daraja ARGS=register-c2b`, `make daraja ARGS="simulate-c2b --amount 10 --ref TEST"`.
+- Whether Daraja blocks ngrok hostnames (§6A.2), whether STK payments to a paybill with registered C2B URLs also trigger a C2B confirmation (handled either way by the receipt constraint), and Safaricom's source IP ranges for `CALLBACK_ALLOWED_IPS` (owner).
+
+### Decisions
+
+- M2 stores and normalizes inside the callback's own transaction (fast, database-only). The transactional outbox with graphile-worker and asynchronous processing arrive in M3 (§6B.6).
+- `DARAJA_ENV` accepts only `sandbox`; the client refuses production (no production money movement).
+- STK push and C2B simulate are never retried automatically (they can charge a customer); OAuth, STK Query and URL registration retry with jitter.
+- A push whose callback arrives before its `CheckoutRequestID` is saved lands in `unrouted_event` (`unknown_checkout`); M3's sweep can re-route it.
+
+---
+
 ## Authorization moved to Permix — 2026-09-28
 
 Owner decision: use **Permix** (`permix` 4.3.0, oRPC integration) instead of the bespoke role checks.

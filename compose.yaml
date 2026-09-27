@@ -79,11 +79,17 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:8080}
       API_DOCS: ${API_DOCS:-off}
       BETTER_AUTH_SECRET_FILE: /run/secrets/better_auth_secret
+      CALLBACK_PATH_SECRET_FILE: /run/secrets/callback_path_secret
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
+      DARAJA_ENV: sandbox
+      CALLBACK_ALLOWED_IPS: ${CALLBACK_ALLOWED_IPS:-}
       NODE_OPTIONS: --max-old-space-size=384
     secrets:
       - source: db_app_password
         target: db_password
       - better_auth_secret
+      - callback_path_secret
+      - data_encryption_key
     depends_on:
       db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
@@ -151,6 +157,54 @@ services:
       resources:
         limits: { memory: 128m }
 
+  daraja:
+    # Sandbox operator CLI: `make daraja ARGS="stk-query --checkout ws_CO_..."`, `make simulate`.
+    <<: *node-service
+    image: paysync/api:${IMAGE_TAG:-local}
+    profiles: [tools]
+    restart: "no"
+    entrypoint: ["node", "--enable-source-maps", "dist/daraja-cli.js"]
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgres://paysync_app@db:5432/paysync
+      DARAJA_CONSUMER_KEY_FILE: /run/secrets/daraja_consumer_key
+      DARAJA_CONSUMER_SECRET_FILE: /run/secrets/daraja_consumer_secret
+      DARAJA_PASSKEY_FILE: /run/secrets/daraja_passkey
+      CALLBACK_PATH_SECRET_FILE: /run/secrets/callback_path_secret
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
+      DARAJA_SHORTCODE: ${DARAJA_SHORTCODE:-174379}
+      DARAJA_C2B_SHORTCODE: ${DARAJA_C2B_SHORTCODE:-600984}
+      CALLBACK_BASE_URL: ${CALLBACK_BASE_URL:-}
+      API_INTERNAL_URL: http://api:3000
+    secrets:
+      - source: db_app_password
+        target: db_password
+      - daraja_consumer_key
+      - daraja_consumer_secret
+      - daraja_passkey
+      - callback_path_secret
+      - data_encryption_key
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal, edge, egress]
+
+  tunnel:
+    # Public URL for sandbox callbacks only. Never used in production.
+    image: ngrok/ngrok:3.39.11-alpine@sha256:187e588f6c4efe3b29cd3eea9fcd768a1afa7342319e3cee9aeb5af6a9cf64fd
+    profiles: [tunnel]
+    entrypoint: ["sh", "-c", "NGROK_AUTHTOKEN=\"$$(cat /run/secrets/ngrok_authtoken)\" exec ngrok http proxy:8080 --log stdout --log-format json"]
+    secrets:
+      - ngrok_authtoken
+    ports:
+      - "127.0.0.1:${NGROK_INSPECT_PORT:-4040}:4040"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    depends_on:
+      proxy: { condition: service_healthy }
+    networks: [edge, egress]
+
   psql:
     image: postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
     profiles: [tools]
@@ -165,6 +219,8 @@ networks:
   internal:
     internal: true
   edge: {}
+  # Outbound internet for Daraja and the tunnel only.
+  egress: {}
 
 volumes:
   db-data: {}
@@ -184,3 +240,15 @@ secrets:
     file: ./secrets/db_readonly_password
   better_auth_secret:
     file: ./secrets/better_auth_secret
+  callback_path_secret:
+    file: ./secrets/callback_path_secret
+  data_encryption_key:
+    file: ./secrets/data_encryption_key
+  daraja_consumer_key:
+    file: ./secrets/daraja_consumer_key
+  daraja_consumer_secret:
+    file: ./secrets/daraja_consumer_secret
+  daraja_passkey:
+    file: ./secrets/daraja_passkey
+  ngrok_authtoken:
+    file: ./secrets/ngrok_authtoken

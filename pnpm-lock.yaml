@@ -216,6 +216,9 @@ importers:
       '@paysync/contract':
         specifier: workspace:*
         version: link:../../packages/contract
+      '@paysync/daraja':
+        specifier: workspace:*
+        version: link:../../packages/daraja
       '@paysync/db':
         specifier: workspace:*
         version: link:../../packages/db

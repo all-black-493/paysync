@@ -24,3 +24,4 @@ export {
 } from './normalize.js'
 export { C2BNotification, StkCallback } from './schemas.js'
 export { formatDarajaTimestamp, parseDarajaTimestamp } from './time.js'
+export { buildScenario, replay, type CallbackKind, type Delivery, type ReplayResult, type ScenarioOptions } from './simulator.js'

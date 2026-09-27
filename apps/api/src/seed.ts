@@ -176,6 +176,21 @@ async function seedOrg(auth: Auth, db: Db, plan: OrgPlan, password: string): Pro
   })
 }
 
+/** Daraja's public sandbox shortcodes (M-Pesa Express test paybill and C2B test paybill) belong to Acme in dev. */
+async function ensureSandboxShortcodes(db: Db): Promise<void> {
+  const [acme] = await db.select({ id: schema.organization.id }).from(schema.organization).where(eq(schema.organization.slug, 'acme-rentals'))
+  if (!acme) return
+  await withOrg(db, acme.id, (tx) =>
+    tx
+      .insert(schema.shortcode)
+      .values([
+        { orgId: acme.id, code: '174379', kind: 'paybill', environment: 'sandbox', stkEnabled: true },
+        { orgId: acme.id, code: '600984', kind: 'paybill', environment: 'sandbox', c2bEnabled: true },
+      ])
+      .onConflictDoNothing({ target: [schema.shortcode.environment, schema.shortcode.code] }),
+  )
+}
+
 async function main(): Promise<void> {
   const config = loadConfig(configSchema, { secrets: [...DATABASE_SECRETS, 'BETTER_AUTH_SECRET'] })
   if (config.NODE_ENV === 'production') throw new Error('seed refuses to run with NODE_ENV=production')
@@ -191,6 +206,7 @@ async function main(): Promise<void> {
     const db = createDb(pool)
     const auth = createAuth({ db, secret: config.BETTER_AUTH_SECRET, baseURL: config.PUBLIC_URL })
     for (const plan of PLANS) await seedOrg(auth, db, plan, config.SEED_PASSWORD)
+    await ensureSandboxShortcodes(db)
     logger.info(
       { users: PLANS.flatMap((p) => p.members.map((m) => `${m.email} (${m.role})`)) },
       'demo data ready; every user signs in with the seed password',

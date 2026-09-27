@@ -177,8 +177,22 @@ lock: ## Refresh pnpm-lock.yaml inside a container (after editing package.json)
 	  sh -c 'corepack pnpm install --lockfile-only'
 
 .PHONY: simulate
-simulate: ## Replay Daraja fixtures against callback routes (M2)
-	@echo "make simulate: not implemented yet (milestone M2)" >&2; exit 1
+simulate: bootstrap ## Replay every Daraja callback fixture (duplicated, shuffled) against the running api
+	$(COMPOSE) --profile tools run --rm daraja replay
+
+.PHONY: daraja
+daraja: bootstrap ## Sandbox Daraja CLI: make daraja ARGS="stk-push --amount 1 --phone 07... --ref INV1"
+	$(COMPOSE) --profile tools run --rm daraja $(ARGS)
+
+.PHONY: tunnel
+tunnel: bootstrap ## Start the ngrok tunnel for sandbox callbacks (needs secrets/ngrok_authtoken)
+	$(COMPOSE) --profile tunnel up --detach --wait tunnel
+	@$(MAKE) --no-print-directory tunnel-url
+
+.PHONY: tunnel-url
+tunnel-url: ## Print the public tunnel URL; put it in .env as CALLBACK_BASE_URL
+	@curl -fsS http://127.0.0.1:$${NGROK_INSPECT_PORT:-4040}/api/tunnels | \
+	  python3 -c "import sys,json; print([t['public_url'] for t in json.load(sys.stdin)['tunnels'] if t['public_url'].startswith('https')][0])"
 
 .PHONY: bench
 bench: ## Matching + guard benchmarks (M10)

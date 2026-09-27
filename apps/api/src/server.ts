@@ -18,6 +18,7 @@ import {
 } from '@orpc/server/plugins'
 import { ZodToJsonSchemaConverter } from '@orpc/zod'
 import { toNodeHandler } from 'better-auth/node'
+import { createHookHandler, type HookOptions } from './hooks.js'
 import { router } from './orpc/router.js'
 
 export interface ApiServerDeps {
@@ -30,6 +31,7 @@ export interface ApiServerDeps {
   readonly publicUrl: string
   /** Serve the API reference UI and spec (non-production only). */
   readonly docs: boolean
+  readonly hooks: Omit<HookOptions, 'db' | 'logger'>
 }
 
 export interface ApiServer {
@@ -112,11 +114,13 @@ export function createApiServer(deps: ApiServerDeps): ApiServer {
     interceptors: [onError(logError)],
   })
   const authHandler = toNodeHandler(deps.auth)
+  const hooks = createHookHandler({ ...deps.hooks, db: deps.db, logger: deps.logger })
 
   const baseContext = { auth: deps.auth, db: deps.db, logger: deps.logger }
 
   const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (health.handle(req, res)) return
+    if (await hooks(req, res)) return
     const path = (req.url ?? '').split('?', 1)[0] ?? ''
 
     // Keys are issued only through apiKeys.create, which fixes their permissions.

@@ -24,6 +24,9 @@
     },
     {
       "path": "../../packages/contract"
+    },
+    {
+      "path": "../../packages/daraja"
     }
   ]
 }

@@ -4,7 +4,7 @@ import type { RoleName } from '@paysync/auth'
 import { createAuth, type Auth } from './auth.js'
 import type { Contract } from '@paysync/contract'
 import { createDb, loadMigrations, type Db } from '@paysync/db'
-import { closeServer, createLogger, listen } from '@paysync/platform'
+import { closeServer, createLogger, createSealer, listen } from '@paysync/platform'
 import type { TestDatabase } from '@paysync/test-utils'
 import { createORPCClient } from '@orpc/client'
 import { RPCLink } from '@orpc/client/fetch'
@@ -13,6 +13,8 @@ import { createApiServer, type ApiServer } from './server.js'
 
 export const PUBLIC_URL = 'http://paysync.test'
 export const PASSWORD = 'correct horse battery staple'
+export const CALLBACK_SECRET = 'test-callback-secret-0123456789abcdef'
+export const TEST_ENCRYPTION_KEY = randomBytes(32).toString('hex')
 
 export interface TestApi extends ApiServer {
   readonly auth: Auth
@@ -33,6 +35,12 @@ export async function startTestApi(database: TestDatabase): Promise<TestApi> {
     logger: createLogger({ service: 'test', level: 'error' }),
     publicUrl: PUBLIC_URL,
     docs: true,
+    hooks: {
+      callbackSecret: CALLBACK_SECRET,
+      allowedIps: [],
+      environment: 'sandbox',
+      pii: createSealer(TEST_ENCRYPTION_KEY, 'pii'),
+    },
   })
   await listen(api.server, 0, '127.0.0.1')
   const { port } = api.server.address() as AddressInfo
