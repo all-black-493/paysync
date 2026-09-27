@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "kind": "oauth_response",
+    "provenance": "Daraja sandbox, captured 2026-09-28",
+    "note": "expires_in is a string, not the documented number."
+  },
+  "payload": {
+    "access_token": "REDACTEDREDACTEDREDACTEDREDA",
+    "expires_in": "3599"
+  }
+}

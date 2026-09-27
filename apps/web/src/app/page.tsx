@@ -3,7 +3,7 @@
 import { ORPCError } from '@orpc/client'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ExceptionsPanel } from '../components/exceptions'
 import { ExpectedPanel } from '../components/expected'
 import { SettingsPanel } from '../components/settings'
@@ -11,6 +11,7 @@ import { TransactionsPanel } from '../components/transactions'
 import { authClient } from '../lib/auth-client'
 import { formatKes, todayInNairobi } from '../lib/format'
 import { orpc } from '../lib/orpc'
+import { permissionsFrom } from '../lib/permissions'
 
 type Tab = 'exceptions' | 'expected' | 'transactions' | 'settings'
 
@@ -20,7 +21,6 @@ const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ['transactions', 'Transactions'],
 ]
 
-const ADMIN_ROLES = new Set(['owner', 'admin'])
 
 export default function HomePage() {
   const router = useRouter()
@@ -41,7 +41,14 @@ function Workspace() {
   if (me.isPending) return <main className="shell muted">Loading…</main>
   if (noActiveOrg) return <OrgPicker />
   if (me.isError) return <main className="shell error">Could not load your workspace.</main>
-  return <Dashboard role={me.data.role} orgName={me.data.organization.name} userName={me.data.actor.name} />
+  return (
+    <Dashboard
+      role={me.data.role}
+      orgName={me.data.organization.name}
+      userName={me.data.actor.name}
+      permissions={me.data.permissions}
+    />
+  )
 }
 
 function OrgPicker() {
@@ -69,13 +76,23 @@ function OrgPicker() {
   )
 }
 
-function Dashboard({ role, orgName, userName }: { role: string; orgName: string; userName: string }) {
+function Dashboard({
+  role,
+  orgName,
+  userName,
+  permissions,
+}: {
+  role: string
+  orgName: string
+  userName: string
+  permissions: Parameters<typeof permissionsFrom>[0]
+}) {
   const [tab, setTab] = useState<Tab>('exceptions')
   const router = useRouter()
   const queryClient = useQueryClient()
-  const canWrite = role !== 'viewer'
-  const isAdmin = role.split(',').some((r) => ADMIN_ROLES.has(r.trim()))
-  const tabs: ReadonlyArray<readonly [Tab, string]> = isAdmin ? [...TABS, ['settings', 'Settings']] : TABS
+  const permix = useMemo(() => permissionsFrom(permissions), [permissions])
+  const canSettings = permix.check('apiKey.read')
+  const tabs: ReadonlyArray<readonly [Tab, string]> = canSettings ? [...TABS, ['settings', 'Settings']] : TABS
 
   return (
     <div className="shell">
@@ -128,10 +145,10 @@ function Dashboard({ role, orgName, userName }: { role: string; orgName: string;
         ))}
       </nav>
 
-      {tab === 'exceptions' ? <ExceptionsPanel canWrite={canWrite} /> : null}
-      {tab === 'expected' ? <ExpectedPanel canWrite={canWrite} /> : null}
+      {tab === 'exceptions' ? <ExceptionsPanel canWrite={permix.check('exception.annotate')} /> : null}
+      {tab === 'expected' ? <ExpectedPanel canWrite={permix.check('expectedPayment.create')} /> : null}
       {tab === 'transactions' ? <TransactionsPanel /> : null}
-      {tab === 'settings' && isAdmin ? <SettingsPanel /> : null}
+      {tab === 'settings' && canSettings ? <SettingsPanel /> : null}
     </div>
   )
 }

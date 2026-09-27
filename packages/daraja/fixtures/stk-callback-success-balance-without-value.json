@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "kind": "stk_callback",
+    "provenance": "derived from Daraja portal docs, retrieved 2026-09-28",
+    "note": "Balance item without a Value, as sometimes delivered."
+  },
+  "payload": {
+    "Body": {
+      "stkCallback": {
+        "MerchantRequestID": "29115-34620561-1",
+        "CheckoutRequestID": "ws_CO_191220191020363925",
+        "ResultCode": 0,
+        "ResultDesc": "The service request is processed successfully.",
+        "CallbackMetadata": {
+          "Item": [
+            {
+              "Name": "Amount",
+              "Value": 1.0
+            },
+            {
+              "Name": "MpesaReceiptNumber",
+              "Value": "NLJ7RT61SV"
+            },
+            {
+              "Name": "Balance"
+            },
+            {
+              "Name": "TransactionDate",
+              "Value": 20191219102115
+            },
+            {
+              "Name": "PhoneNumber",
+              "Value": 254708374149
+            }
+          ]
+        }
+      }
+    }
+  }
+}

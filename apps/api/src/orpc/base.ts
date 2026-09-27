@@ -1,4 +1,4 @@
-import { INTEGRATOR_SCOPES, can, grants, scopeOf, type Permission } from '@paysync/auth'
+import { INTEGRATOR_RULES, rulesForMember, scopeOf } from '@paysync/auth'
 import { API_KEY_CONFIG, type Auth } from '../auth.js'
 import { contract } from '@paysync/contract'
 import { schema, type Db } from '@paysync/db'
@@ -10,6 +10,7 @@ import type {
 } from '@orpc/server/plugins'
 import { and, eq } from 'drizzle-orm'
 import { permissionFor } from './permissions.js'
+import { permix } from './permix.js'
 
 export type Surface = 'web' | 'rest'
 
@@ -37,27 +38,34 @@ function deny(message: string): never {
   throw new ORPCError('FORBIDDEN', { message })
 }
 
-async function apiKeyCaller(context: InitialContext, key: string, permission: Permission | null): Promise<Caller> {
+type Rules = Parameters<typeof permix.setupContext>[0]
+
+interface Resolved {
+  readonly caller: Caller
+  readonly rules: Rules
+}
+
+async function apiKeyCaller(context: InitialContext, key: string): Promise<Resolved> {
   // Integrators use REST; the typed RPC surface is for the web app's session.
   if (context.surface !== 'rest') throw new ORPCError('UNAUTHORIZED')
   const result = await context.auth.api.verifyApiKey({ body: { key, configId: API_KEY_CONFIG } })
   if (!result.valid || !result.key) throw new ORPCError('UNAUTHORIZED', { message: 'Invalid or revoked API key.' })
   const scope = scopeOf(result.key.permissions)
   if (!scope) deny('This API key has no usable scope.')
-  if (permission !== null && !grants(INTEGRATOR_SCOPES[scope], permission)) {
-    deny('This API key’s scope does not allow this action.')
-  }
   return {
-    kind: 'api_key',
-    actorId: `apikey:${result.key.id}`,
-    name: result.key.name ?? 'API key',
-    email: null,
-    orgId: result.key.referenceId,
-    role: `api_key:${scope}`,
+    caller: {
+      kind: 'api_key',
+      actorId: `apikey:${result.key.id}`,
+      name: result.key.name ?? 'API key',
+      email: null,
+      orgId: result.key.referenceId,
+      role: `api_key:${scope}`,
+    },
+    rules: INTEGRATOR_RULES[scope],
   }
 }
 
-async function sessionCaller(context: InitialContext, permission: Permission | null): Promise<Caller> {
+async function sessionCaller(context: InitialContext): Promise<Resolved> {
   const { headers, response: session } = await context.auth.api.getSession({
     headers: context.reqHeaders ?? new Headers(),
     returnHeaders: true,
@@ -74,23 +82,29 @@ async function sessionCaller(context: InitialContext, permission: Permission | n
     .from(schema.member)
     .where(and(eq(schema.member.organizationId, orgId), eq(schema.member.userId, session.user.id)))
   if (!member) deny('You are not a member of the active organization.')
-  if (permission !== null && !can(member.role, permission)) deny('Your role does not allow this action.')
 
   return {
-    kind: 'user',
-    actorId: session.user.id,
-    name: session.user.name,
-    email: session.user.email,
-    orgId,
-    role: member.role,
+    caller: {
+      kind: 'user',
+      actorId: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+      orgId,
+      role: member.role,
+    },
+    rules: rulesForMember(member.role),
   }
 }
 
 const requireCaller = os.middleware(async ({ context, path, next }) => {
-  const permission = permissionFor(path)
+  const required = permissionFor(path)
   const key = context.reqHeaders?.get('x-api-key')
-  const caller = key ? await apiKeyCaller(context, key, permission) : await sessionCaller(context, permission)
-  return next({ context: { caller } })
+  const { caller, rules } = key ? await apiKeyCaller(context, key) : await sessionCaller(context)
+  const permissions = permix.setupContext(rules)
+  if (required !== null && !permissions.permix.check(required)) {
+    deny(caller.kind === 'api_key' ? 'This API key’s scope does not allow this action.' : 'Your role does not allow this action.')
+  }
+  return next({ context: { caller, ...permissions } })
 })
 
 export const authed = os.use(requireCaller)

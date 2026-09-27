@@ -1,112 +1,106 @@
-import { createAccessControl, type AccessControl, type Role } from 'better-auth/plugins/access'
-import { adminAc, defaultStatements, ownerAc } from 'better-auth/plugins/organization/access'
+import { createRules, type ValidateDefinition } from 'permix'
+import { parseRoles, type RoleName } from './roles.js'
 
-export const statements = {
-  ...defaultStatements,
-  transaction: ['read', 'writeOff'],
-  expectedPayment: ['read', 'create', 'update', 'void'],
-  exception: ['read', 'annotate'],
-  match: ['read', 'suggest', 'confirm', 'unmatch'],
-  report: ['read'],
-  reconciliation: ['run'],
-  approval: ['approve'],
-  reversal: ['request'],
-  apiKey: ['create', 'read', 'update', 'delete'],
-} as const
+export type PermissionsDefinition = ValidateDefinition<{
+  transaction: ['read', 'writeOff']
+  expectedPayment: ['read', 'create', 'update', 'void']
+  exception: ['read', 'annotate']
+  match: ['read', 'suggest', 'confirm', 'unmatch']
+  report: ['read']
+  reconciliation: ['run']
+  approval: ['approve']
+  reversal: ['request']
+  apiKey: ['read', 'create', 'delete']
+}>
 
-// Explicit types keep the declaration emit as Better Auth's aliases, which the
-// organization plugin needs to infer our role names across package boundaries.
-export const ac: AccessControl<typeof statements> = createAccessControl(statements)
+type Rules = ReturnType<typeof createRules<PermissionsDefinition>>
 
-const readAll = {
-  transaction: ['read'],
-  expectedPayment: ['read'],
-  exception: ['read'],
-  match: ['read', 'suggest'],
-  report: ['read'],
-} as const
-
-const clerkWork = {
-  ...readAll,
-  expectedPayment: ['read', 'create', 'update', 'void'],
-  exception: ['read', 'annotate'],
-  match: ['read', 'suggest', 'confirm', 'unmatch'],
-  transaction: ['read', 'writeOff'],
-  reconciliation: ['run'],
-} as const
-
-// Destructive requests from a clerk still go through approval (M5); only approvers may approve.
-const approverWork = {
-  ...clerkWork,
-  approval: ['approve'],
-  reversal: ['request'],
-} as const
-
-export type RoleName = 'viewer' | 'clerk' | 'accountant' | 'admin' | 'owner'
-
-export const roles: Record<RoleName, Role> = {
-  viewer: ac.newRole(readAll),
-  clerk: ac.newRole(clerkWork),
-  accountant: ac.newRole(approverWork),
-  admin: ac.newRole({ ...approverWork, ...adminAc.statements, apiKey: ['create', 'read', 'update', 'delete'] }),
-  owner: ac.newRole({ ...approverWork, ...ownerAc.statements, apiKey: ['create', 'read', 'update', 'delete'] }),
+const none = {
+  transaction: { read: false, writeOff: false },
+  expectedPayment: { read: false, create: false, update: false, void: false },
+  exception: { read: false, annotate: false },
+  match: { read: false, suggest: false, confirm: false, unmatch: false },
+  report: { read: false },
+  reconciliation: { run: false },
+  approval: { approve: false },
+  reversal: { request: false },
+  apiKey: { read: false, create: false, delete: false },
 }
 
-export const ROLE_NAMES = Object.keys(roles) as RoleName[]
-export const APPROVER_ROLES: readonly RoleName[] = ['accountant', 'admin', 'owner']
+const viewer = createRules<PermissionsDefinition>({
+  ...none,
+  transaction: { read: true, writeOff: false },
+  expectedPayment: { read: true, create: false, update: false, void: false },
+  exception: { read: true, annotate: false },
+  match: { read: true, suggest: true, confirm: false, unmatch: false },
+  report: { read: true },
+})
 
-type Statements = typeof statements
-export type Permission = { [R in keyof Statements]?: ReadonlyArray<Statements[R][number]> }
+// A clerk may request destructive actions; they go through approval (M5).
+const clerk = createRules<PermissionsDefinition>({
+  ...viewer,
+  transaction: { read: true, writeOff: true },
+  expectedPayment: { read: true, create: true, update: true, void: true },
+  exception: { read: true, annotate: true },
+  match: { read: true, suggest: true, confirm: true, unmatch: true },
+  reconciliation: { run: true },
+})
 
-function isRoleName(value: string): value is RoleName {
-  return Object.hasOwn(roles, value)
-}
+const accountant = createRules<PermissionsDefinition>({
+  ...clerk,
+  approval: { approve: true },
+  reversal: { request: true },
+})
 
-/** A member can hold several roles, stored comma-separated by Better Auth. Unknown roles grant nothing. */
-export function can(memberRole: string, permission: Permission): boolean {
-  return memberRole
-    .split(',')
-    .map((r) => r.trim())
-    .filter(isRoleName)
-    .some((name) => roles[name].authorize(permission).success)
-}
+const admin = createRules<PermissionsDefinition>({
+  ...accountant,
+  apiKey: { read: true, create: true, delete: true },
+})
+
+export const ROLE_RULES: Readonly<Record<RoleName, Rules>> = { viewer, clerk, accountant, admin, owner: admin }
 
 /**
- * What integrator API keys may ever hold (read and write only). Destructive,
- * money and approval actions are not grantable to a key under any scope.
+ * Integrator API keys: read, or read plus a few writes. A key can never
+ * approve, void, write off, unmatch, reverse or manage keys, under any scope.
  */
-export const INTEGRATOR_SCOPES = {
-  read: readAll,
-  write: {
-    ...readAll,
-    expectedPayment: ['read', 'create', 'update'],
-    exception: ['read', 'annotate'],
-  },
-} as const satisfies Record<string, Permission>
+export const INTEGRATOR_RULES = {
+  read: createRules<PermissionsDefinition>({ ...viewer, match: { read: true, suggest: false, confirm: false, unmatch: false } }),
+  write: createRules<PermissionsDefinition>({
+    ...viewer,
+    match: { read: true, suggest: false, confirm: false, unmatch: false },
+    expectedPayment: { read: true, create: true, update: true, void: false },
+    exception: { read: true, annotate: true },
+  }),
+} as const
 
-export type IntegratorScope = keyof typeof INTEGRATOR_SCOPES
+export type IntegratorScope = keyof typeof INTEGRATOR_RULES
 
-/** True when every action in `permission` is granted by `granted`. */
-export function grants(granted: Permission, permission: Permission): boolean {
-  return Object.entries(permission).every(([resource, actions]) => {
-    const allowed = (granted as Record<string, ReadonlyArray<string> | undefined>)[resource] ?? []
-    return actions.every((action) => allowed.includes(action))
-  })
+export const DENY_ALL: Rules = createRules<PermissionsDefinition>(none)
+
+/** Union of the rules of every role the member holds; unknown roles grant nothing. */
+export function rulesForMember(memberRole: string): Rules {
+  const granted = parseRoles(memberRole).map((r) => ROLE_RULES[r])
+  const merged = structuredClone(none) as Record<string, Record<string, boolean>>
+  for (const rules of granted) {
+    for (const [entity, actions] of Object.entries(rules as Record<string, Record<string, unknown>>)) {
+      for (const [action, value] of Object.entries(actions)) {
+        const entityRules = merged[entity]
+        if (entityRules && value === true) entityRules[action] = true
+      }
+    }
+  }
+  return createRules<PermissionsDefinition>(merged as typeof none)
 }
 
-/** Reads a scope back from stored key permissions; anything else is treated as no access. */
+/** How a key's scope is stored in Better Auth's key record. */
+export function keyPermissionsFor(scope: IntegratorScope): Record<string, string[]> {
+  return { paysync: [scope] }
+}
+
 export function scopeOf(permissions: unknown): IntegratorScope | null {
-  const same = (a: Permission) => JSON.stringify(sortPermission(a)) === JSON.stringify(sortPermission(permissions))
-  if (same(INTEGRATOR_SCOPES.write)) return 'write'
-  if (same(INTEGRATOR_SCOPES.read)) return 'read'
-  return null
-}
-
-function sortPermission(value: unknown): unknown {
-  if (value === null || typeof value !== 'object') return value
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => [k, Array.isArray(v) ? [...(v as string[])].sort() : v]),
-  )
+  if (permissions === null || typeof permissions !== 'object' || !('paysync' in permissions)) return null
+  const values: unknown = permissions.paysync
+  if (!Array.isArray(values) || values.length !== 1) return null
+  const scope: unknown = values[0]
+  return scope === 'read' || scope === 'write' ? scope : null
 }

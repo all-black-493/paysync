@@ -30,6 +30,7 @@ const me = authed.me.get.handler(async ({ context }) => {
     actor: { type: caller.kind, id: caller.actorId, name: caller.name, email: caller.email },
     organization: org,
     role: caller.role,
+    permissions: context.permix.dehydrate(),
   }
 })
 

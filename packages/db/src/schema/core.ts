@@ -13,7 +13,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import { bytea, createdAt, currency, id, idOrgUnique, money, oneOf, orgId, sameOrg, updatedAt, version } from './columns.js'
-import { inboundEvent } from './ingest.js'
+import { inboundEvent, stkRequest } from './ingest.js'
 
 export const core = pgSchema('core')
 
@@ -110,6 +110,7 @@ export const mpesaTransaction = core.table(
     msisdnHash: bytea(),
     status: text({ enum: TRANSACTION_STATUSES }).notNull().default('pending_verification'),
     inboundEventId: uuid(),
+    stkRequestId: uuid(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     version: version(),
@@ -119,6 +120,7 @@ export const mpesaTransaction = core.table(
     idOrgUnique('mpesa_transaction_id_org_unique', t),
     sameOrg('mpesa_transaction_shortcode_fk', { column: t.shortcodeId, orgId: t.orgId }, shortcode),
     sameOrg('mpesa_transaction_inbound_event_fk', { column: t.inboundEventId, orgId: t.orgId }, inboundEvent),
+    sameOrg('mpesa_transaction_stk_request_fk', { column: t.stkRequestId, orgId: t.orgId }, stkRequest),
     index().on(t.orgId, t.transactedAt),
     index().on(t.orgId, t.status),
     check('mpesa_transaction_amount_positive', sql`${t.amount} > 0`),

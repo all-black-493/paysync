@@ -228,6 +228,9 @@ importers:
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0)
+      permix:
+        specifier: 4.3.0
+        version: 4.3.0(@orpc/server@2.0.0-beta.40)(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(next@16.3.6(@babel/core@7.29.7)(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       pg:
         specifier: 8.23.0
         version: 8.23.0
@@ -296,6 +299,9 @@ importers:
       next:
         specifier: 16.3.6
         version: 16.3.6(@babel/core@7.29.7)(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      permix:
+        specifier: 4.3.0
+        version: 4.3.0(@orpc/server@2.0.0-beta.40)(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(next@16.3.6(@babel/core@7.29.7)(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -327,6 +333,13 @@ importers:
       better-auth:
         specifier: 1.7.6
         version: 1.7.6(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(pg@8.23.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      permix:
+        specifier: 4.3.0
+        version: 4.3.0(@orpc/server@2.0.0-beta.40)(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(next@16.3.6(@babel/core@7.29.7)(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+    devDependencies:
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.6)(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
   packages/contract:
     dependencies:
@@ -339,6 +352,16 @@ importers:
       zod:
         specifier: 4.6.5
         version: 4.6.5
+
+  packages/daraja:
+    dependencies:
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.6)(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
   packages/db:
     dependencies:
@@ -2442,6 +2465,69 @@ packages:
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
+
+  permix@4.3.0:
+    resolution: {integrity: sha512-W+Ej5gfdTno8/ga6fqc0B0PuH5MmJ96MDPnRV4zmNyOXTqkkzQXu/ZifWU5DwyJJR+ypTasBB9VWptp7DUGgew==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@nestjs/common': '>=10'
+      '@nestjs/core': '>=10'
+      '@orpc/server': '>=1'
+      '@tanstack/react-start': '>=1'
+      '@trpc/server': '>=11'
+      drizzle-orm: '>=0.30.0 || >=1.0.0-rc.3'
+      effect: '>=3'
+      elysia: '>=1'
+      express: '>=4'
+      fastify: '>=5'
+      fastify-plugin: '>=5'
+      hono: '>=4'
+      next: '>=14'
+      react: '>=18'
+      react-dom: '>=18'
+      reflect-metadata: '>=0.1.13'
+      solid-js: '>=1'
+      svelte: '>=5'
+      vue: '>=3'
+    peerDependenciesMeta:
+      '@nestjs/common':
+        optional: true
+      '@nestjs/core':
+        optional: true
+      '@orpc/server':
+        optional: true
+      '@tanstack/react-start':
+        optional: true
+      '@trpc/server':
+        optional: true
+      drizzle-orm:
+        optional: true
+      effect:
+        optional: true
+      elysia:
+        optional: true
+      express:
+        optional: true
+      fastify:
+        optional: true
+      fastify-plugin:
+        optional: true
+      hono:
+        optional: true
+      next:
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+      reflect-metadata:
+        optional: true
+      solid-js:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
 
   pg-cloudflare@1.4.0:
     resolution: {integrity: sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==}
@@ -4638,6 +4724,14 @@ snapshots:
   path-key@3.1.1: {}
 
   pathe@2.0.3: {}
+
+  permix@4.3.0(@orpc/server@2.0.0-beta.40)(drizzle-orm@0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0))(next@16.3.6(@babel/core@7.29.7)(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
+    optionalDependencies:
+      '@orpc/server': 2.0.0-beta.40
+      drizzle-orm: 0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0)
+      next: 16.3.6(@babel/core@7.29.7)(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
 
   pg-cloudflare@1.4.0:
     optional: true

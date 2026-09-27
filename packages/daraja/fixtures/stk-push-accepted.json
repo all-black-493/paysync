@@ -1,0 +1,14 @@
+{
+  "meta": {
+    "kind": "stk_push_response",
+    "provenance": "Daraja sandbox, captured 2026-09-28",
+    "httpStatus": 200
+  },
+  "payload": {
+    "MerchantRequestID": "4e7d-425c-aa3e-9b62f1dcf8a2972367",
+    "CheckoutRequestID": "ws_CO_280920260007566708374149",
+    "ResponseCode": "0",
+    "ResponseDescription": "Success. Request accepted for processing",
+    "CustomerMessage": "Success. Request accepted for processing"
+  }
+}

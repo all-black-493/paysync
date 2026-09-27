@@ -1,0 +1,13 @@
+{
+  "meta": {
+    "kind": "daraja_error",
+    "provenance": "Daraja sandbox, captured 2026-09-28",
+    "note": "Unknown CheckoutRequestID.",
+    "httpStatus": 500
+  },
+  "payload": {
+    "requestId": "ws_CO_000000000000000000000",
+    "errorCode": "500.001.1001",
+    "errorMessage": "The transaction does not Exist"
+  }
+}

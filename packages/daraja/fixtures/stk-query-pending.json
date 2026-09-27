@@ -1,0 +1,16 @@
+{
+  "meta": {
+    "kind": "stk_query_response",
+    "provenance": "Daraja sandbox, captured 2026-09-28",
+    "note": "ResultCode \"4999\" (undocumented): still processing. The sandbox test number never completes.",
+    "httpStatus": 200
+  },
+  "payload": {
+    "ResponseCode": "0",
+    "ResponseDescription": "The service request has been accepted successfully",
+    "MerchantRequestID": "4e7d-425c-aa3e-9b62f1dcf8a2972367",
+    "CheckoutRequestID": "ws_CO_280920260007566708374149",
+    "ResultCode": "4999",
+    "ResultDesc": "The transaction is still under processing"
+  }
+}

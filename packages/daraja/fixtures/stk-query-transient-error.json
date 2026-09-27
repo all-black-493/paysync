@@ -1,0 +1,13 @@
+{
+  "meta": {
+    "kind": "daraja_error",
+    "provenance": "Daraja sandbox, captured 2026-09-28",
+    "note": "Intermittent on a valid CheckoutRequestID; errorMessage is empty.",
+    "httpStatus": 500
+  },
+  "payload": {
+    "requestId": "ws_CO_280920260007566708374149",
+    "errorCode": "500.001.1001",
+    "errorMessage": ""
+  }
+}

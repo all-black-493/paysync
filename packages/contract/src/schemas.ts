@@ -148,6 +148,25 @@ export const DailySummary = z
   .strict()
   .meta({ id: 'DailySummary' })
 
+const flags = <const K extends string>(...actions: K[]) =>
+  z.object(Object.fromEntries(actions.map((a) => [a, z.boolean()])) as Record<K, z.ZodBoolean>).strict()
+
+export const Permissions = z
+  .object({
+    transaction: flags('read', 'writeOff'),
+    expectedPayment: flags('read', 'create', 'update', 'void'),
+    exception: flags('read', 'annotate'),
+    match: flags('read', 'suggest', 'confirm', 'unmatch'),
+    report: flags('read'),
+    reconciliation: flags('run'),
+    approval: flags('approve'),
+    reversal: flags('request'),
+    apiKey: flags('read', 'create', 'delete'),
+  })
+  .strict()
+  .describe('What this caller may do, as entity → action → allowed. Use it to decide which actions to offer; the API still enforces every call.')
+  .meta({ id: 'Permissions' })
+
 export const Me = z
   .object({
     actor: z
@@ -160,6 +179,7 @@ export const Me = z
       .strict(),
     organization: z.object({ id: z.string(), name: z.string(), slug: z.string() }).strict(),
     role: z.string().describe('Organization role for users; "api_key:read" or "api_key:write" for integrator keys.'),
+    permissions: Permissions,
   })
   .strict()
   .meta({ id: 'Me' })

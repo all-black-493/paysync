@@ -87,14 +87,184 @@
           "role": {
             "type": "string",
             "description": "Organization role for users; \"api_key:read\" or \"api_key:write\" for integrator keys."
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/Permissions"
           }
         },
         "required": [
           "actor",
           "organization",
-          "role"
+          "role",
+          "permissions"
         ],
         "additionalProperties": false
+      },
+      "Permissions": {
+        "type": "object",
+        "properties": {
+          "transaction": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "boolean"
+              },
+              "writeOff": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "read",
+              "writeOff"
+            ],
+            "additionalProperties": false
+          },
+          "expectedPayment": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "boolean"
+              },
+              "create": {
+                "type": "boolean"
+              },
+              "update": {
+                "type": "boolean"
+              },
+              "void": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "read",
+              "create",
+              "update",
+              "void"
+            ],
+            "additionalProperties": false
+          },
+          "exception": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "boolean"
+              },
+              "annotate": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "read",
+              "annotate"
+            ],
+            "additionalProperties": false
+          },
+          "match": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "boolean"
+              },
+              "suggest": {
+                "type": "boolean"
+              },
+              "confirm": {
+                "type": "boolean"
+              },
+              "unmatch": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "read",
+              "suggest",
+              "confirm",
+              "unmatch"
+            ],
+            "additionalProperties": false
+          },
+          "report": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "read"
+            ],
+            "additionalProperties": false
+          },
+          "reconciliation": {
+            "type": "object",
+            "properties": {
+              "run": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "run"
+            ],
+            "additionalProperties": false
+          },
+          "approval": {
+            "type": "object",
+            "properties": {
+              "approve": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "approve"
+            ],
+            "additionalProperties": false
+          },
+          "reversal": {
+            "type": "object",
+            "properties": {
+              "request": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "request"
+            ],
+            "additionalProperties": false
+          },
+          "apiKey": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "boolean"
+              },
+              "create": {
+                "type": "boolean"
+              },
+              "delete": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "read",
+              "create",
+              "delete"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "transaction",
+          "expectedPayment",
+          "exception",
+          "match",
+          "report",
+          "reconciliation",
+          "approval",
+          "reversal",
+          "apiKey"
+        ],
+        "additionalProperties": false,
+        "description": "What this caller may do, as entity → action → allowed. Use it to decide which actions to offer; the API still enforces every call."
       },
       "UndefinedError": {
         "title": "UndefinedError",

@@ -1,14 +1,12 @@
+export { ac, roles, statements } from './better-auth-roles.js'
 export {
-  APPROVER_ROLES,
-  INTEGRATOR_SCOPES,
-  ROLE_NAMES,
-  ac,
-  can,
-  grants,
-  roles,
+  DENY_ALL,
+  INTEGRATOR_RULES,
+  ROLE_RULES,
+  keyPermissionsFor,
+  rulesForMember,
   scopeOf,
-  statements,
   type IntegratorScope,
-  type Permission,
-  type RoleName,
+  type PermissionsDefinition,
 } from './permissions.js'
+export { APPROVER_ROLES, ROLE_NAMES, isRoleName, parseRoles, type RoleName } from './roles.js'

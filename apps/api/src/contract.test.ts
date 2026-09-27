@@ -22,6 +22,7 @@ describe('public contract', () => {
   it('fails closed for procedures without a permission mapping', () => {
     expect(() => permissionFor(['expected', 'void'])).toThrow(/no permission mapping/)
     expect(() => permissionFor(['expected'])).toThrow(/no permission mapping/)
-    expect(permissionFor(['expected', 'create'])).toEqual(PERMISSIONS.expected.create)
+    expect(permissionFor(['expected', 'create'])).toBe(PERMISSIONS.expected.create)
+    expect(permissionFor(['me', 'get'])).toBeNull()
   })
 })

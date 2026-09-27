@@ -30,3 +30,4 @@ export {
 } from './ledger.js'
 export { pgConstraint, pgErrorCode, withOrg, type Tx, type WithOrgOptions } from './tenancy.js'
 export { CONSTRAINTS, SQLSTATE } from './constraints.js'
+export { createDarajaTokenStore, type DarajaTokenStore } from './daraja-token-store.js'

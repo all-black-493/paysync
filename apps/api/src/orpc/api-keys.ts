@@ -1,4 +1,4 @@
-import { INTEGRATOR_SCOPES, scopeOf, type IntegratorScope } from '@paysync/auth'
+import { keyPermissionsFor, scopeOf } from '@paysync/auth'
 import { schema } from '@paysync/db'
 import { and, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -32,11 +32,6 @@ function parsePermissions(value: string | null): unknown {
   } catch {
     return null
   }
-}
-
-/** Mutable copy for Better Auth, which types permissions as string arrays. */
-function permissionsFor(scope: IntegratorScope): Record<string, string[]> {
-  return Object.fromEntries(Object.entries(INTEGRATOR_SCOPES[scope]).map(([resource, actions]) => [resource, [...actions]]))
 }
 
 const ApiKeyShape = z.object({
@@ -98,7 +93,7 @@ const create = authed.apiKeys.create.handler(async ({ context, input }) =>
           userId: context.caller.actorId,
           name: input.name,
           expiresIn,
-          permissions: permissionsFor(input.scope),
+          permissions: keyPermissionsFor(input.scope),
         },
       })
       const [row] = await context.db.select().from(apikey).where(eq(apikey.id, created.id))

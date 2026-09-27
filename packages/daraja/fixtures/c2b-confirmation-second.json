@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "kind": "c2b_confirmation",
+    "provenance": "derived from Daraja portal docs, retrieved 2026-09-28"
+  },
+  "payload": {
+    "TransactionType": "Pay Bill",
+    "TransID": "RKL51ZDR5G",
+    "TransTime": "20231121121912",
+    "TransAmount": "1250.00",
+    "BusinessShortCode": "600966",
+    "BillRefNumber": "unit a2 oct",
+    "InvoiceNumber": "",
+    "OrgAccountBalance": "1275.00",
+    "ThirdPartyTransID": "",
+    "MSISDN": "2547 ***** 126",
+    "FirstName": "NICHOLAS",
+    "MiddleName": "",
+    "LastName": ""
+  }
+}

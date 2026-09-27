@@ -22,3 +22,4 @@ export {
 } from './health.js'
 export { createLogger, type Logger, type LoggerOptions } from './logger.js'
 export { closeServer, installGracefulShutdown, listen, type ShutdownOptions, type ShutdownStep } from './shutdown.js'
+export { DecryptionError, createSealer, safeEqual, type Sealer } from './crypto.js'

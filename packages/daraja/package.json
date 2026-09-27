@@ -1,5 +1,5 @@
 {
-  "name": "@paysync/auth",
+  "name": "@paysync/daraja",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,11 +11,11 @@
   },
   "files": [
     "dist",
-    "!dist/**/*.test.*"
+    "!dist/**/*.test.*",
+    "fixtures"
   ],
   "dependencies": {
-    "better-auth": "1.7.6",
-    "permix": "4.3.0"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "vitest": "4.1.11"

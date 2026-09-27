@@ -5,6 +5,18 @@ Newest milestone first.
 
 ---
 
+## Authorization moved to Permix — 2026-09-28
+
+Owner decision: use **Permix** (`permix` 4.3.0, oRPC integration) instead of the bespoke role checks.
+
+- `@paysync/auth` defines `PermissionsDefinition` (entities → actions) and Permix rule sets per role (`ROLE_RULES`, viewer ⊂ clerk ⊂ accountant ⊂ admin = owner) and per integrator scope (`INTEGRATOR_RULES.read` / `.write`). Members with several roles get the union; unknown roles get nothing.
+- Better Auth's access control now covers only Better Auth's own resources (organization, members, invitations, API key management); application permissions are Permix only.
+- The api builds the caller's rules in its auth middleware and calls `permix.setupContext(rules)` (context key `permix`). Each procedure's required Permix path comes from `PERMISSIONS` in `apps/api/src/orpc/permissions.ts`, which the compiler forces to list every contract procedure. This is used instead of per-procedure `permix.checkMiddleware(...)` so a forgotten check cannot compile. Unmapped paths throw (fail closed).
+- `me.get` returns `permissions` (Permix `dehydrate()`); the contract lists every entity and action explicitly, so a drift between the Permix definition and the contract fails to compile on the server (dehydrate) and in the web app (hydrate). The web app hides actions with a hydrated Permix instance; the API still enforces.
+- Integrator keys store their scope as `{ paysync: ['read'|'write'] }` in Better Auth's key record.
+
+---
+
 ## M1 follow-up: integrator keys, invite-only sign-up — 2026-09-26
 
 Owner decisions: integrator API keys now (no stubs); sign-up invite-only; every package must declare the third-party modules it imports.
