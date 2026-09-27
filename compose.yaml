@@ -210,7 +210,16 @@ services:
     # Public URL for sandbox callbacks only. Never used in production.
     image: ngrok/ngrok:3.39.11-alpine@sha256:187e588f6c4efe3b29cd3eea9fcd768a1afa7342319e3cee9aeb5af6a9cf64fd
     profiles: [tunnel]
-    entrypoint: ["sh", "-c", "NGROK_AUTHTOKEN=\"$$(cat /run/secrets/ngrok_authtoken)\" exec ngrok http proxy:8080 --web-addr 0.0.0.0:4040 --log stdout --log-format json"]
+    # Only the Daraja callback routes are reachable through the tunnel; the web app and API stay local.
+    # The inspector must listen on all container interfaces for the published port to reach it.
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        printf 'version: "3"\nagent:\n  web_addr: 0.0.0.0:4040\n' > /tmp/ngrok.yml &&
+        printf 'on_http_request:\n  - expressions:\n      - "!req.url.path.startsWith(\x27/hooks/\x27)"\n    actions:\n      - type: deny\n        config:\n          status_code: 404\n' > /tmp/policy.yml &&
+        NGROK_AUTHTOKEN="$$(cat /run/secrets/ngrok_authtoken)"
+        exec ngrok http proxy:8080 --config /tmp/ngrok.yml --traffic-policy-file /tmp/policy.yml --log stdout --log-format json
     secrets:
       - ngrok_authtoken
     ports:

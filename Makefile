@@ -191,8 +191,11 @@ tunnel: bootstrap ## Start the ngrok tunnel for sandbox callbacks (needs secrets
 
 .PHONY: tunnel-url
 tunnel-url: ## Print the public tunnel URL; put it in .env as CALLBACK_BASE_URL
-	@curl -fsS http://127.0.0.1:$${NGROK_INSPECT_PORT:-4040}/api/tunnels | \
-	  python3 -c "import sys,json; print([t['public_url'] for t in json.load(sys.stdin)['tunnels'] if t['public_url'].startswith('https')][0])"
+	@for i in $$(seq 1 20); do \
+	  curl -fsS http://127.0.0.1:$${NGROK_INSPECT_PORT:-4040}/api/tunnels 2>/dev/null | \
+	    python3 -c "import sys,json; print([t['public_url'] for t in json.load(sys.stdin)['tunnels'] if t['public_url'].startswith('https')][0])" 2>/dev/null && exit 0; \
+	  sleep 1; \
+	done; echo "tunnel not up; see: docker compose --profile tunnel logs tunnel" >&2; exit 1
 
 .PHONY: bench
 bench: ## Matching + guard benchmarks (M10)
