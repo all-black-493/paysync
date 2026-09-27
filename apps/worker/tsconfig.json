@@ -15,6 +15,15 @@
     },
     {
       "path": "../../packages/db"
+    },
+    {
+      "path": "../../packages/daraja"
+    },
+    {
+      "path": "../../packages/ingest"
+    },
+    {
+      "path": "../../packages/test-utils"
     }
   ]
 }

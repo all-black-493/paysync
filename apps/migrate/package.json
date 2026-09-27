@@ -10,8 +10,8 @@
   "dependencies": {
     "@paysync/db": "workspace:*",
     "@paysync/platform": "workspace:*",
-    "zod": "4.6.5",
-    "pg": "8.23.0"
+    "pg": "8.23.0",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/pg": "8.23.1"

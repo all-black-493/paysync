@@ -23,5 +23,10 @@ export function createPool(options: PoolOptions): Pool {
   pool.on('error', (error) => {
     options.logger.error({ err: error }, 'idle database client error')
   })
+  pool.on('connect', (client) => {
+    client.on('error', (error) => {
+      options.logger.error({ err: error }, 'database client error')
+    })
+  })
   return pool
 }

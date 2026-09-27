@@ -341,7 +341,7 @@ const dailySummary = authed.reports.dailySummary.handler(async ({ context, input
         and(
           gte(mpesaTransaction.transactedAt, start),
           lt(mpesaTransaction.transactedAt, end),
-          ne(mpesaTransaction.status, 'reversed'),
+          inArray(mpesaTransaction.status, ['pending_verification', 'verified']),
         ),
       )
     const [open] = await tx.select({ count: count() }).from(exception).where(eq(exception.status, 'open'))

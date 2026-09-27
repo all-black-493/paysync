@@ -102,6 +102,18 @@ describe('row-level security', () => {
     expect(await orgsSeen(orgB)).toEqual([{ org_id: orgB }])
   })
 
+  it('is enabled on every table with an org_id', async () => {
+    const { rows } = await admin.query<{ table: string; rls: boolean }>(`
+      SELECT n.nspname || '.' || c.relname AS table, c.relrowsecurity AS rls
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'org_id' AND NOT a.attisdropped
+      WHERE c.relkind IN ('r', 'p') AND n.nspname IN ('core', 'ingest', 'ledger', 'agent', 'audit')
+      ORDER BY 1`)
+    expect(rows.length).toBeGreaterThan(10)
+    expect(rows.filter((r) => !r.rls).map((r) => r.table)).toEqual([])
+  })
+
   it('returns nothing when no org is set', async () => {
     const { rows } = await app.query('SELECT 1 FROM core.mpesa_transaction')
     expect(rows).toEqual([])
@@ -138,8 +150,17 @@ describe('append-only tables', () => {
     await asOrg(app, orgA, async (c) => {
       await postJournalRaw(c, orgA, 'append-only-1', [100n, -100n])
     })
-    for (const table of ['ledger.entry', 'ledger.journal', 'ledger.account', 'audit.event', 'ingest.inbound_event', 'core.allocation']) {
-      await expect(asOrg(app, orgA, (c) => c.query(`UPDATE ${table} SET org_id = org_id`))).rejects.toMatchObject({ code: '42501' })
+    for (const table of [
+      'ledger.entry',
+      'ledger.journal',
+      'ledger.account',
+      'audit.event',
+      'ingest.inbound_event',
+      'ingest.unrouted_event',
+      'core.allocation',
+      'core.balance_snapshot',
+    ]) {
+      await expect(asOrg(app, orgA, (c) => c.query(`UPDATE ${table} SET id = id`))).rejects.toMatchObject({ code: '42501' })
       await expect(asOrg(app, orgA, (c) => c.query(`DELETE FROM ${table}`))).rejects.toMatchObject({ code: '42501' })
     }
   })

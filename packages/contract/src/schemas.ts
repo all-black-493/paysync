@@ -50,13 +50,18 @@ export function untrusted(schema: z.ZodString) {
 
 export const ShortcodeSummary = z.object({ id: Id, code: z.string(), kind: z.enum(['paybill', 'till']) }).strict()
 
+export const TransactionStatus = z
+  .enum(['pending_verification', 'verified', 'verification_failed', 'reversed'])
+  .describe('Only verified transactions are confirmed with Safaricom and posted to the ledger.')
+
 export const Transaction = z
   .object({
     id: Id,
     receiptNumber: z.string(),
     amount: Money,
     transactedAt: IsoDateTime,
-    status: z.enum(['pending_verification', 'verified', 'reversed']),
+    status: TransactionStatus,
+    verifiedAt: IsoDateTime.nullable(),
     source: z.enum(['c2b', 'stk', 'pull', 'statement']),
     billRefNumber: untrusted(z.string()).nullable(),
     shortcode: ShortcodeSummary,
@@ -96,6 +101,7 @@ export const ExceptionKind = z.enum([
   'amount_mismatch',
   'balance_variance',
   'job_failed',
+  'missing_callback',
 ])
 export const ExceptionStatus = z.enum(['open', 'resolved', 'dismissed'])
 

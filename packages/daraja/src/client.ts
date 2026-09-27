@@ -1,12 +1,17 @@
+import { createHash } from 'node:crypto'
 import { setTimeout as sleep } from 'node:timers/promises'
 import type { z } from 'zod'
 import { toWholeShillings } from './money.js'
 import { stkOutcome, type StkOutcome } from './normalize.js'
+import { formatPullDate } from './results.js'
 import {
+  AsyncRequestResponse,
   C2BRegisterResponse,
   C2BSimulateResponse,
   DarajaErrorResponse,
   OAuthResponse,
+  PullRegisterResponse,
+  PullResponse,
   StkPushResponse,
   StkQueryResponse,
 } from './schemas.js'
@@ -44,6 +49,13 @@ export interface DarajaCredentials {
   readonly passkey: string
 }
 
+/** An M-Pesa API operator (initiator) for Transaction Status and Account Balance. */
+export interface DarajaInitiator {
+  readonly name: string
+  /** The encrypted password (see createSecurityCredential). */
+  readonly securityCredential: string
+}
+
 export interface DarajaLogger {
   info(obj: object, msg: string): void
   warn(obj: object, msg: string): void
@@ -56,6 +68,7 @@ export interface DarajaClientOptions {
   readonly credentials: DarajaCredentials
   readonly tokenStore: TokenStore
   readonly logger: DarajaLogger
+  readonly initiator?: DarajaInitiator
   readonly timeoutMs?: number
   readonly fetch?: typeof fetch
   readonly now?: () => Date
@@ -77,6 +90,11 @@ export class DarajaError extends Error {
     this.errorCode = details.errorCode
     this.retryable = details.retryable
   }
+}
+
+/** Token cache key for a consumer key: stable, and not the key itself. */
+export function credentialIdFor(environment: DarajaEnvironment, consumerKey: string): string {
+  return `${environment}:${createHash('sha256').update(consumerKey).digest('hex').slice(0, 12)}`
 }
 
 const INVALID_TOKEN_CODES = new Set(['404.001.03', '400.003.01'])
@@ -115,6 +133,11 @@ export interface StkQueryResult {
   readonly outcome: StkOutcome | 'unknown'
   readonly resultCode: string | null
   readonly resultDesc: string
+}
+
+export interface ResultUrls {
+  readonly resultUrl: string
+  readonly timeoutUrl: string
 }
 
 export class DarajaClient {
@@ -203,6 +226,87 @@ export class DarajaClient {
         Amount: toWholeShillings(input.amountMinor),
         Msisdn: Number(normalizeMsisdn(input.msisdn)),
         BillRefNumber: input.billRefNumber,
+      },
+    })
+  }
+
+  get hasInitiator(): boolean {
+    return this.options.initiator !== undefined
+  }
+
+  private initiator(): DarajaInitiator {
+    if (!this.options.initiator) throw new DarajaError('no Daraja initiator is configured', noRetry)
+    return this.options.initiator
+  }
+
+  private resultUrls(urls: ResultUrls) {
+    assertCallbackUrl(urls.resultUrl, this.options.environment)
+    assertCallbackUrl(urls.timeoutUrl, this.options.environment)
+    return { ResultURL: urls.resultUrl, QueueTimeOutURL: urls.timeoutUrl }
+  }
+
+  /**
+   * Asks M-Pesa for the status of a receipt; the answer arrives on the Result URL.
+   * Read-only, so it is retried on transient errors.
+   */
+  async transactionStatus(input: { shortcode: string; receiptNumber: string } & ResultUrls) {
+    const initiator = this.initiator()
+    return this.call('/mpesa/transactionstatus/v1/query', AsyncRequestResponse, {
+      retry: true,
+      body: {
+        Initiator: initiator.name,
+        SecurityCredential: initiator.securityCredential,
+        CommandID: 'TransactionStatusQuery',
+        TransactionID: input.receiptNumber,
+        PartyA: input.shortcode,
+        IdentifierType: '4',
+        Remarks: 'Reconciliation',
+        Occasion: 'Reconciliation',
+        ...this.resultUrls(input),
+      },
+    })
+  }
+
+  /** Account balances for a shortcode; the answer arrives on the Result URL. */
+  async accountBalance(input: { shortcode: string } & ResultUrls) {
+    const initiator = this.initiator()
+    return this.call('/mpesa/accountbalance/v1/query', AsyncRequestResponse, {
+      retry: true,
+      body: {
+        Initiator: initiator.name,
+        SecurityCredential: initiator.securityCredential,
+        CommandID: 'AccountBalance',
+        PartyA: input.shortcode,
+        IdentifierType: '4',
+        Remarks: 'Reconciliation',
+        ...this.resultUrls(input),
+      },
+    })
+  }
+
+  /** One page of C2B transactions in a window (the last 48 hours at most). */
+  async pullTransactions(input: { shortcode: string; start: Date; end: Date; offset: number }) {
+    return this.call('/pulltransactions/v1/query', PullResponse, {
+      retry: true,
+      body: {
+        ShortCode: input.shortcode,
+        StartDate: formatPullDate(input.start),
+        EndDate: formatPullDate(input.end),
+        OffSetValue: String(input.offset),
+      },
+    })
+  }
+
+  /** One-time registration of a shortcode for Pull Transactions. */
+  async registerPull(input: { shortcode: string; nominatedNumber: string; callbackUrl: string }) {
+    assertCallbackUrl(input.callbackUrl, this.options.environment)
+    return this.call('/pulltransactions/v1/register', PullRegisterResponse, {
+      retry: false,
+      body: {
+        ShortCode: input.shortcode,
+        RequestType: 'Pull',
+        NominatedNumber: normalizeMsisdn(input.nominatedNumber),
+        CallBackURL: input.callbackUrl,
       },
     })
   }

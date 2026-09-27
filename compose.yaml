@@ -108,12 +108,29 @@ services:
       DB_POOL_MAX: ${WORKER_DB_POOL_MAX:-10}
       HEALTH_PORT: 3001
       NODE_OPTIONS: --max-old-space-size=384
+      DARAJA_ENV: sandbox
+      DARAJA_CONSUMER_KEY_FILE: /run/secrets/daraja_consumer_key
+      DARAJA_CONSUMER_SECRET_FILE: /run/secrets/daraja_consumer_secret
+      DARAJA_PASSKEY_FILE: /run/secrets/daraja_passkey
+      DARAJA_INITIATOR_NAME: ${DARAJA_INITIATOR_NAME:-}
+      DARAJA_INITIATOR_PASSWORD_FILE: /run/secrets/daraja_initiator_password
+      CALLBACK_PATH_SECRET_FILE: /run/secrets/callback_path_secret
+      CALLBACK_BASE_URL: ${CALLBACK_BASE_URL:-}
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
     secrets:
       - source: db_app_password
         target: db_password
+      - daraja_consumer_key
+      - daraja_consumer_secret
+      - daraja_passkey
+      - daraja_initiator_password
+      - callback_path_secret
+      - data_encryption_key
     depends_on:
       db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
+    # The only long-running service that calls Daraja.
+    networks: [internal, egress]
     deploy:
       resources:
         limits: { memory: 512m }
@@ -193,7 +210,7 @@ services:
     # Public URL for sandbox callbacks only. Never used in production.
     image: ngrok/ngrok:3.39.11-alpine@sha256:187e588f6c4efe3b29cd3eea9fcd768a1afa7342319e3cee9aeb5af6a9cf64fd
     profiles: [tunnel]
-    entrypoint: ["sh", "-c", "NGROK_AUTHTOKEN=\"$$(cat /run/secrets/ngrok_authtoken)\" exec ngrok http proxy:8080 --log stdout --log-format json"]
+    entrypoint: ["sh", "-c", "NGROK_AUTHTOKEN=\"$$(cat /run/secrets/ngrok_authtoken)\" exec ngrok http proxy:8080 --web-addr 0.0.0.0:4040 --log stdout --log-format json"]
     secrets:
       - ngrok_authtoken
     ports:
@@ -250,5 +267,7 @@ secrets:
     file: ./secrets/daraja_consumer_secret
   daraja_passkey:
     file: ./secrets/daraja_passkey
+  daraja_initiator_password:
+    file: ./secrets/daraja_initiator_password
   ngrok_authtoken:
     file: ./secrets/ngrok_authtoken

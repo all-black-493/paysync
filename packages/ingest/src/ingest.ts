@@ -8,10 +8,11 @@ import {
   type NormalizedPayment,
   type NormalizedStkCallback,
 } from '@paysync/daraja'
-import { schema, withOrg, type Db, type Tx } from '@paysync/db'
+import { enqueueJob, schema, withOrg, type Db, type Tx } from '@paysync/db'
 import type { Logger, Sealer } from '@paysync/platform'
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
+import { sealPayload } from './sealing.js'
 
 const { exception, inboundEvent, mpesaTransaction, stkRequest, unroutedEvent } = schema
 
@@ -23,7 +24,7 @@ export interface IngestDeps {
 }
 
 export type C2BSource = 'c2b_validation' | 'c2b_confirmation'
-type Source = C2BSource | 'stk_callback'
+export type Source = (typeof schema.INBOUND_SOURCES)[number]
 type UnroutedReason = (typeof schema.UNROUTED_REASONS)[number]
 
 export interface IngestResult {
@@ -33,30 +34,9 @@ export interface IngestResult {
   readonly createdReceipt: string | null
 }
 
-/** Personal fields inside callback bodies; sealed before the body is stored. */
-const PII_FIELDS = new Set(['MSISDN', 'FirstName', 'MiddleName', 'LastName'])
-const PII_ITEMS = new Set(['PhoneNumber'])
+export const bodyHash = (text: string) => `sha256:${createHash('sha256').update(text).digest('hex')}`
 
-/** Keeps the body's shape verbatim but replaces personal values with ciphertext. */
-export function sealPayload(payload: unknown, pii: Sealer): unknown {
-  if (Array.isArray(payload)) return payload.map((v) => sealPayload(v, pii))
-  if (payload === null || typeof payload !== 'object') return payload
-  const entries = Object.entries(payload)
-  const isPiiItem = entries.some(([k, v]) => k === 'Name' && typeof v === 'string' && PII_ITEMS.has(v))
-  return Object.fromEntries(
-    entries.map(([k, v]) => {
-      const sensitive = PII_FIELDS.has(k) || (isPiiItem && k === 'Value')
-      if (sensitive && v !== null && v !== undefined && v !== '') {
-        return [k, { $sealed: pii.seal(String(v)).toString('base64') }]
-      }
-      return [k, sealPayload(v, pii)]
-    }),
-  )
-}
-
-const bodyHash = (text: string) => `sha256:${createHash('sha256').update(text).digest('hex')}`
-
-async function storeUnrouted(
+export async function storeUnrouted(
   deps: IngestDeps,
   source: Source,
   externalId: string,
@@ -81,9 +61,9 @@ async function lookup<T extends z.ZodType>(db: Db, query: SQL, row: T): Promise<
   return rows.length === 0 ? undefined : row.parse(rows[0])
 }
 
-async function insertEvent(
+export async function insertEvent(
   tx: Tx,
-  deps: IngestDeps,
+  deps: Pick<IngestDeps, 'pii'>,
   values: { orgId: string; shortcodeId: string; source: Source; externalId: string; payload: unknown },
 ): Promise<string | null> {
   const [row] = await tx
@@ -94,14 +74,18 @@ async function insertEvent(
   return row?.id ?? null
 }
 
-/** At most one transaction per (shortcode, receipt), whichever delivery arrives first. */
-async function insertTransaction(
+/**
+ * At most one transaction per (shortcode, receipt), whichever delivery arrives
+ * first. A new transaction is queued for verification in the same database
+ * transaction.
+ */
+export async function insertTransaction(
   tx: Tx,
-  deps: IngestDeps,
+  deps: Pick<IngestDeps, 'pii'>,
   values: {
     orgId: string
     shortcodeId: string
-    source: 'c2b' | 'stk'
+    source: 'c2b' | 'stk' | 'pull'
     inboundEventId: string
     stkRequestId?: string
     payment: NormalizedPayment
@@ -126,7 +110,9 @@ async function insertTransaction(
     })
     .onConflictDoNothing({ target: [mpesaTransaction.shortcodeId, mpesaTransaction.receiptNumber] })
     .returning({ id: mpesaTransaction.id })
-  return row?.id ?? null
+  if (!row) return null
+  await enqueueJob(tx, 'verify_transaction', { orgId: values.orgId, transactionId: row.id }, { jobKey: `verify:${row.id}` })
+  return row.id
 }
 
 const ShortcodeRoute = z.object({ shortcode_id: z.string(), org_id: z.string() })
@@ -238,6 +224,7 @@ export async function ingestStkCallback(deps: IngestDeps, body: unknown): Promis
         priority: 'high',
         summary: `STK payment ${payment.receiptNumber} differs from the amount requested`,
         transactionId,
+        dedupeKey: `amount_mismatch:${transactionId}`,
         details: { requestedMinor: request.amount.toString(), receivedMinor: payment.amountMinor.toString() },
       })
     }

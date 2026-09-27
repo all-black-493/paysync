@@ -1,9 +1,11 @@
 import { sql } from 'drizzle-orm'
 import {
+  bigint,
   boolean,
   check,
   date,
   index,
+  integer,
   jsonb,
   numeric,
   pgSchema,
@@ -20,7 +22,8 @@ export const core = pgSchema('core')
 export const SHORTCODE_KINDS = ['paybill', 'till'] as const
 export const ENVIRONMENTS = ['sandbox', 'production'] as const
 export const EXPECTED_PAYMENT_STATUSES = ['open', 'partially_paid', 'paid', 'void'] as const
-export const TRANSACTION_STATUSES = ['pending_verification', 'verified', 'reversed'] as const
+export const TRANSACTION_STATUSES = ['pending_verification', 'verified', 'verification_failed', 'reversed'] as const
+export const VERIFICATION_METHODS = ['stk_query', 'transaction_status', 'pull'] as const
 export const TRANSACTION_SOURCES = ['c2b', 'stk', 'pull', 'statement'] as const
 export const MATCH_METHODS = ['exact', 'rule', 'jev', 'manual'] as const
 export const MATCH_STATUSES = ['active', 'unmatched'] as const
@@ -34,6 +37,7 @@ export const EXCEPTION_KINDS = [
   'amount_mismatch',
   'balance_variance',
   'job_failed',
+  'missing_callback',
 ] as const
 export const EXCEPTION_STATUSES = ['open', 'resolved', 'dismissed'] as const
 export const EXCEPTION_PRIORITIES = ['normal', 'high'] as const
@@ -49,6 +53,8 @@ export const shortcode = core.table(
     c2bEnabled: boolean().notNull().default(false),
     stkEnabled: boolean().notNull().default(false),
     pullEnabled: boolean().notNull().default(false),
+    /** Our Daraja initiator may run Transaction Status and Account Balance for this shortcode. */
+    initiatorEnabled: boolean().notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     version: version(),
@@ -111,6 +117,10 @@ export const mpesaTransaction = core.table(
     status: text({ enum: TRANSACTION_STATUSES }).notNull().default('pending_verification'),
     inboundEventId: uuid(),
     stkRequestId: uuid(),
+    verifiedAt: timestamp({ withTimezone: true }),
+    verificationMethod: text({ enum: VERIFICATION_METHODS }),
+    verificationAttempts: integer().notNull().default(0),
+    lastVerificationAt: timestamp({ withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     version: version(),
@@ -128,6 +138,12 @@ export const mpesaTransaction = core.table(
     check('mpesa_transaction_status', oneOf('status', TRANSACTION_STATUSES)),
     check('mpesa_transaction_source', oneOf('source', TRANSACTION_SOURCES)),
     check('mpesa_transaction_receipt_format', sql`${t.receiptNumber} ~ '^[A-Z0-9]{10}$'`),
+    check('mpesa_transaction_verification_method', sql`${t.verificationMethod} IS NULL OR ${oneOf('verification_method', VERIFICATION_METHODS)}`),
+    check(
+      'mpesa_transaction_verified_at',
+      sql`(${t.status} IN ('pending_verification', 'verification_failed')) = (${t.verifiedAt} IS NULL)`,
+    ),
+    check('mpesa_transaction_verification_method_verified', sql`${t.verificationMethod} IS NULL OR ${t.verifiedAt} IS NOT NULL`),
   ],
 )
 
@@ -194,6 +210,8 @@ export const exception = core.table(
     expectedPaymentId: uuid(),
     summary: text().notNull(),
     details: jsonb().notNull().default({}),
+    /** Raising the same exception again is a no-op while one with this key exists. */
+    dedupeKey: text(),
     note: text(),
     tags: text()
       .array()
@@ -206,6 +224,7 @@ export const exception = core.table(
   },
   (t) => [
     index().on(t.orgId, t.status, t.createdAt),
+    unique('exception_dedupe_key_unique').on(t.orgId, t.dedupeKey),
     sameOrg('exception_transaction_fk', { column: t.transactionId, orgId: t.orgId }, mpesaTransaction),
     sameOrg('exception_expected_payment_fk', { column: t.expectedPaymentId, orgId: t.orgId }, expectedPayment),
     check('exception_kind', oneOf('kind', EXCEPTION_KINDS)),
@@ -213,5 +232,29 @@ export const exception = core.table(
     check('exception_priority', oneOf('priority', EXCEPTION_PRIORITIES)),
     check('exception_note_length', sql`${t.note} IS NULL OR char_length(${t.note}) <= 2000`),
     check('exception_tags_count', sql`cardinality(${t.tags}) <= 20`),
+  ],
+)
+
+/** Account balances reported by Daraja's Account Balance API. Append-only. */
+export const balanceSnapshot = core.table(
+  'balance_snapshot',
+  {
+    id: id(),
+    orgId: orgId(),
+    shortcodeId: uuid().notNull(),
+    darajaRequestId: uuid().notNull().unique(),
+    /** Signed minor units per account: charges paid is normally negative. */
+    utility: bigint({ mode: 'bigint' }).notNull(),
+    working: bigint({ mode: 'bigint' }).notNull(),
+    chargesPaid: bigint({ mode: 'bigint' }).notNull(),
+    accounts: jsonb().notNull(),
+    currency: currency(),
+    reportedAt: timestamp({ withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index().on(t.orgId, t.shortcodeId, t.reportedAt),
+    sameOrg('balance_snapshot_shortcode_fk', { column: t.shortcodeId, orgId: t.orgId }, shortcode),
+    check('balance_snapshot_currency', sql`${t.currency} = 'KES'`),
   ],
 )

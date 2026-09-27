@@ -1,9 +1,9 @@
 import { inspect } from 'node:util'
 import type { RoleName } from '@paysync/auth'
 import { createAuth, type Auth } from './auth.js'
-import { allocate, createDb, createPool, schema, withOrg, type Db } from '@paysync/db'
+import { allocate, createDb, createPool, postReceipt, schema, withOrg, type Db } from '@paysync/db'
 import { ConfigError, DATABASE_SECRETS, commonEnvShape, createLogger, databaseEnvShape, loadConfig } from '@paysync/platform'
-import { eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { normalizeReference } from './orpc/mappers.js'
 
@@ -133,9 +133,11 @@ async function seedOrg(auth: Auth, db: Db, plan: OrgPlan, password: string): Pro
           source: 'c2b',
           billRefNumber: p.billRef,
           status: 'verified',
+          verifiedAt: new Date(),
         })
         .returning({ id: schema.mpesaTransaction.id })
       if (!txRow) continue
+      await postReceipt(tx, { orgId, transactionId: txRow.id, receiptNumber: p.receipt, amount: p.amount, createdBy: 'seed' })
       const target = p.allocateTo ? expectedIds.get(p.allocateTo) : undefined
       if (target) {
         const [m] = await tx
@@ -180,15 +182,20 @@ async function seedOrg(auth: Auth, db: Db, plan: OrgPlan, password: string): Pro
 async function ensureSandboxShortcodes(db: Db): Promise<void> {
   const [acme] = await db.select({ id: schema.organization.id }).from(schema.organization).where(eq(schema.organization.slug, 'acme-rentals'))
   if (!acme) return
-  await withOrg(db, acme.id, (tx) =>
-    tx
+  await withOrg(db, acme.id, async (tx) => {
+    await tx
       .insert(schema.shortcode)
       .values([
         { orgId: acme.id, code: '174379', kind: 'paybill', environment: 'sandbox', stkEnabled: true },
-        { orgId: acme.id, code: '600984', kind: 'paybill', environment: 'sandbox', c2bEnabled: true },
+        { orgId: acme.id, code: '600984', kind: 'paybill', environment: 'sandbox', c2bEnabled: true, initiatorEnabled: true },
       ])
-      .onConflictDoNothing({ target: [schema.shortcode.environment, schema.shortcode.code] }),
-  )
+      .onConflictDoNothing({ target: [schema.shortcode.environment, schema.shortcode.code] })
+    // The sandbox test initiator may query C2B shortcode 600984 (Transaction Status, Account Balance).
+    await tx
+      .update(schema.shortcode)
+      .set({ initiatorEnabled: true, version: sql`${schema.shortcode.version} + 1` })
+      .where(and(eq(schema.shortcode.code, '600984'), eq(schema.shortcode.initiatorEnabled, false)))
+  })
 }
 
 async function main(): Promise<void> {

@@ -7,10 +7,20 @@ const BETTER_AUTH_RUNTIME_PEERS = new Set(['pg', 'drizzle-orm', 'react', 'react-
 const keepRuntime = (record) =>
   record && Object.fromEntries(Object.entries(record).filter(([name]) => BETTER_AUTH_RUNTIME_PEERS.has(name)))
 
+// graphile-worker and its config loader take TypeScript as an optional peer for
+// loading .ts config and task files, which we do not use (tasks are compiled).
+const DROP_TYPESCRIPT_PEER = new Set(['graphile-worker', 'graphile-config', 'cosmiconfig'])
+
+const without = (record, name) => record && Object.fromEntries(Object.entries(record).filter(([key]) => key !== name))
+
 function readPackage(pkg) {
   if (pkg.name === 'better-auth') {
     pkg.peerDependencies = keepRuntime(pkg.peerDependencies)
     pkg.peerDependenciesMeta = keepRuntime(pkg.peerDependenciesMeta)
+  }
+  if (DROP_TYPESCRIPT_PEER.has(pkg.name)) {
+    pkg.peerDependencies = without(pkg.peerDependencies, 'typescript')
+    pkg.peerDependenciesMeta = without(pkg.peerDependenciesMeta, 'typescript')
   }
   return pkg
 }

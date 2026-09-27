@@ -5,6 +5,72 @@ Newest milestone first.
 
 ---
 
+## M3: Verification + sweeps — done 2026-09-28
+
+### Done-when evidence
+
+"A deliberately 'missed' callback is recovered by a sweep with exactly one posting."
+
+| Check | How | Result |
+|---|---|---|
+| Missed C2B confirmation recovered | `recovery.int.test.ts`: payment exists only at "Safaricom" (fake Daraja Pull); `sweep_pull` → `pull_transactions` job (paged, 3 records) → transaction created `verified` (`pull`) with its receipt journal; then the confirmation arrives twice and the sweep runs again over an overlapping window | 1 transaction and 1 `receipt` journal per receipt; 1 inbound event per source |
+| Callback + sweep race | 6 receipts × (2 confirmations + 2 Pull ingestions) concurrently | 1 transaction, `verified`, 1 journal each |
+| Missed STK callback | open push, no callback; `sweep_stk_requests` → STK Query "0" → push `succeeded` + high-priority `missing_callback` (no receipt yet); Pull then supplies the receipt | 1 journal; sweep does not re-query |
+| Early callback re-routed | STK callback before its CheckoutRequestID was saved (stored unrouted) → the STK check re-routes it → verified | 1 journal |
+| Verification paths | `verification.int.test.ts`: Transaction Status match / amount mismatch / other shortcode / not Completed / result before ConversationID saved / queue timeout then re-drive / non-success code / attempts exhausted; STK Query success (4 concurrent verifications → 1 posting), cancelled, amount ≠ push, still pending; balance snapshots + variance; failed job → exception | all pass |
+| Outbox | `hooks.int.test.ts`: every transaction created by a callback has exactly one `verify_transaction` job, enqueued in the callback's DB transaction | pass |
+| Running stack | `make up`: migrate installs the queue schema; worker starts with the crontab; at 23:00 UTC `sweep_unverified` queued the 4 pending M2 transactions and ran them against the real sandbox (still pending: fixture checkouts are unknown to Daraja, and no public URL for Transaction Status results) | as expected |
+| Suite | `make test` 188 passed; lint + dependency check, typecheck, verify-images (23), smoke, scan | green |
+
+The recovery tests run real Postgres 18 and graphile-worker's own `runOnce`; only Daraja is faked (`FakeDaraja` in `apps/worker/src/harness.test.support.ts`), because Pull Transactions is not available to our sandbox app (below) and the sandbox never completes an STK payment to its test number.
+
+### What exists
+
+- **Money gate** (`apps/worker/src/verification.ts`): `markVerified` is the only path from `pending_verification` to `verified` and the only place a receipt is posted (debit `mpesa_float`, credit `suspense`, journal key `receipt:<transactionId>`). It locks the row and acts only on pending rows; the journal key and receipt uniqueness make a second posting impossible. `failVerification` sets `verification_failed` and raises a high-priority exception, no ledger credit.
+- **How each source is verified:**
+  - STK: STK Query `ResultCode "0"` **and** the callback amount equals the amount we pushed (STK Query returns no amount or receipt). Cancelled/failed → `verification_failed`; pending/unknown → stay pending.
+  - C2B: Transaction Status by receipt, answered on `/hooks/result/txn/:secret`. Verified only if result code 0, same receipt, same amount, `TransactionStatus = Completed`, and (when present) `CreditPartyName` starts with our shortcode. Any mismatch → `verification_failed`. **Any other result code stays pending** (e.g. a rejected initiator says nothing about the payment): fail closed.
+  - Pull: a record we fetched from Safaricom creates the transaction already verified, or verifies/fails a pending one by amount.
+- **Transactional outbox:** `insertTransaction` enqueues `verify_transaction` (job key `verify:<id>`) in the same DB transaction as the transaction row; result bodies enqueue `apply_daraja_result` the same way. Callback handling itself stays synchronous and DB-only (M2).
+- **Worker tasks:** `verify_transaction`, `apply_daraja_result`, `check_stk_request`, `pull_transactions`, `request_balance`. Retries with graphile's backoff (3–8 attempts by task); a job out of retries becomes a high-priority `job_failed` exception (`job:failed` event).
+- **Crontab (UTC):** `sweep_unverified` and `sweep_stk_requests` every 10 min, `sweep_pull` hourly at :07, `sweep_balances` 15:00 (18:00 EAT). Sweeps visit each organization in its own RLS scope and only enqueue keyed jobs. After 12 unsuccessful verification attempts a normal-priority "could not be verified" exception is raised and the sweep stops (the payment stays pending; a late result can still verify it).
+- **Result URLs:** `POST /hooks/result/{txn|balance}/:secret` and `/hooks/timeout/{txn|balance}/:secret`, same rules as the M2 routes. Outbound async requests are recorded in `ingest.daraja_request` before the call; results are routed by ConversationID/OriginatorConversationID (`ingest.route_daraja_conversation`, `SECURITY DEFINER`). A result that beats its ConversationID is stored as `unknown_conversation` and re-routed by the job that sent the request (`rerouteUnrouted`); the same for early STK callbacks.
+- **Account balance:** snapshots in `core.balance_snapshot` (append-only). Variance = change in (utility + working + charges paid) minus verified receipts between snapshots; non-zero → high-priority `balance_variance`.
+- **Personal data:** `DebitPartyName`/`CreditPartyName` result parameters are sealed like MSISDN and names.
+- `@paysync/ingest` (new) holds callback/result ingestion, shared by the api (hooks) and the worker (re-routing, Pull). The worker is the only long-running service on the `egress` network.
+- Web: the new status shows as a red "verification failed" badge.
+
+### Decisions
+
+- **graphile-worker 0.18.0** (pinned; §6 lists it). Its schema lives in `jobs` and is installed by the `migrate` container as `paysync_owner` (`installJobQueue`), never by the app role. graphile enables row-level security on its private tables with no policies, so `installJobQueue` adds `app_worker` policies (app role only) and grants DML there; `add_job` is called directly, as the docs require for non-owner roles once grants exist. A worker that finds the queue schema outdated cannot migrate it and fails to start.
+- The TypeScript optional peer of graphile-worker/`cosmiconfig` is dropped in `.pnpmfile.mjs` (like better-auth's), so runtime images keep no dev dependencies.
+- Transaction status `verification_failed` and exception kind `missing_callback` added; `Transaction.verifiedAt` added to the contract. Additive, contract not yet released (snapshot reviewed).
+- The migration backfills `verified_at` for rows verified before M3 (seed data only), bumping `version` as the trigger requires. Seeded verified transactions now also post their receipt journal; **existing dev databases** keep six seeded verified transactions without journals (`make db-reset && make seed` to rebuild).
+- Verification timings live in `apps/worker/src/deps.ts` (`DEFAULT_POLICY`) until `config/policy.ts` arrives with matching/guard.
+- Initiator: `DARAJA_INITIATOR_NAME` (env) + `secrets/daraja_initiator_password`; the security credential is generated in memory at worker start from Safaricom's sandbox certificate (committed at `packages/daraja/certs/sandbox.cer`, a public key). Without a name or without `CALLBACK_BASE_URL`, Transaction Status and Account Balance are skipped and payments wait for Pull.
+
+### Daraja findings (sandbox, 2026-09-28)
+
+- Transaction Status and Account Balance with initiator `testapi` both answer synchronously `ResponseCode "0"`, "Accept the service request successfully." (`OriginatorConversationID` like `8423-4a3b-87d8-1d918a78741e243712`, `ConversationID` like `AG_20260928_0100101002hi3i67m6ml`). The acknowledgement does not check the credential; the verdict comes on the Result URL. **[VERIFY]** result bodies once a tunnel is up.
+- **Pull Transactions query returns HTTP 401 `401.001` "Invalid Access Token"** with a token that works for every other product: the sandbox app is not subscribed to Pull (the portal says Pull registration needs a live shortcode). Pull is implemented against the documented shapes and tested with the fake only.
+- The sandbox certificate from the portal (`/certificates/SandboxCertificate.cer`, CN `apicrypt.safaricom.co.ke`) **expired in 2016**; only its public key is used. Whether Daraja still decrypts with the matching key shows in the first real result.
+- Documented Transaction Status result sample repeats `DebitPartyName` (the second is presumably the credit party) and uses a B2C example; the Account Balance sample has string `ResultCode`, the Transaction Status sample a number. Handled per product.
+- Pull request dates are `YYYY-MM-DD HH:mm:ss` (taken as EAT); records carry `trxDate` with a `Z` suffix **[VERIFY whether it is really UTC]**. The documented record's `transactionId` (`yzlyrEsRG1`) is not a receipt format; such records are stored unrouted and skipped.
+- The Getting Started page lists 12 Safaricom gateway IPs for callback whitelisting (196.201.214.200, .206, .207, .208, 196.201.213.114, .44, 196.201.212.127, .138, .129, .136, .74, .69). Not enabled: owner to confirm with Safaricom (§5.3.4), sandbox stays open.
+
+### Third-party Daraja skill vs our rules
+
+The owner added a third-party Daraja skill (`.claude/skills/...mpesa-daraja`). Where it differs from the portal or AGENTS.md we follow those: it says to always answer callbacks 200 even if processing fails (we answer 500 when the payload was not stored, §5.3.7); it uses `/mpesa/c2b/v1/registerurl` (portal documents v2); its `test_credentials` link is a 404; its claim that the sandbox callback delivery is unreliable is **[VERIFY]**.
+
+### Still to verify / owner actions
+
+- **ngrok:** `secrets/ngrok_authtoken` is still the random placeholder from `make secrets` (ngrok says `ERR_NGROK_105`). With a real authtoken: `make tunnel`, set `CALLBACK_BASE_URL`, `make up`, `make daraja ARGS=register-c2b`, `make daraja ARGS="simulate-c2b --amount 10 --ref TEST"` → the worker sends Transaction Status and the real result arrives. `make tunnel` now also exposes the ngrok inspector on 127.0.0.1:4040 (it listened only inside the container before).
+- **Initiator password:** `secrets/daraja_initiator_password` is a random placeholder; put the sandbox app's test initiator password there (Daraja simulator → test credentials).
+- Pull Transactions access (production shortcode registration) and the real Transaction Status / balance / timeout result payloads.
+- Balance variance counts withdrawals, settlement charges and reversals as variance until those flows are ingested (statement import); expect false positives on days with withdrawals.
+
+---
+
 ## M2: Daraja ingestion (sandbox) — done 2026-09-28
 
 ### Done-when evidence

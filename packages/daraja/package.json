@@ -12,7 +12,8 @@
   "files": [
     "dist",
     "!dist/**/*.test.*",
-    "fixtures"
+    "fixtures",
+    "certs"
   ],
   "dependencies": {
     "zod": "4.6.5"

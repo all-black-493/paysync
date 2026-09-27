@@ -332,7 +332,21 @@
             "enum": [
               "pending_verification",
               "verified",
+              "verification_failed",
               "reversed"
+            ],
+            "description": "Only verified transactions are confirmed with Safaricom and posted to the ledger."
+          },
+          "verifiedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "source": {
@@ -399,6 +413,7 @@
           "amount",
           "transactedAt",
           "status",
+          "verifiedAt",
           "source",
           "billRefNumber",
           "shortcode",
@@ -651,7 +666,8 @@
               "verification_failed",
               "amount_mismatch",
               "balance_variance",
-              "job_failed"
+              "job_failed",
+              "missing_callback"
             ]
           },
           "status": {
@@ -1048,8 +1064,10 @@
               "enum": [
                 "pending_verification",
                 "verified",
+                "verification_failed",
                 "reversed"
-              ]
+              ],
+              "description": "Only verified transactions are confirmed with Safaricom and posted to the ledger."
             },
             "allowEmptyValue": true,
             "allowReserved": true
@@ -1733,7 +1751,8 @@
                 "verification_failed",
                 "amount_mismatch",
                 "balance_variance",
-                "job_failed"
+                "job_failed",
+                "missing_callback"
               ]
             },
             "allowEmptyValue": true,

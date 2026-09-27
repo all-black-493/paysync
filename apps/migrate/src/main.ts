@@ -1,5 +1,5 @@
 import { inspect } from 'node:util'
-import { runMigrations } from '@paysync/db'
+import { ROLES, installJobQueue, runMigrations } from '@paysync/db'
 import {
   ConfigError,
   DATABASE_SECRETS,
@@ -27,6 +27,26 @@ async function main(): Promise<void> {
     logger.info({ applied: result.applied, alreadyApplied: result.alreadyApplied }, 'migrations complete')
   } finally {
     await client.end()
+  }
+  const ownerPool = new pg.Pool({
+    ...databaseConnectionParams(config.DATABASE_URL, config.DATABASE_PASSWORD),
+    application_name: 'paysync-migrate',
+    options: `-c role=${ROLES.owner}`,
+    max: 2,
+  })
+  ownerPool.on('error', (error) => {
+    logger.error({ err: error }, 'idle database client error')
+  })
+  ownerPool.on('connect', (client) => {
+    client.on('error', (error) => {
+      logger.error({ err: error }, 'database client error')
+    })
+  })
+  try {
+    await installJobQueue(ownerPool, logger)
+    logger.info('job queue schema ready')
+  } finally {
+    await ownerPool.end()
   }
 }
 

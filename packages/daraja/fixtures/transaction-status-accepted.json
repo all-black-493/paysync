@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "kind": "async_request_response",
+    "provenance": "Daraja portal docs, retrieved 2026-09-28"
+  },
+  "payload": {
+    "OriginatorConversationID": "1236-7134259-1",
+    "ConversationID": "AG_20210709_1234409f86436c583e3f",
+    "ResponseCode": "0",
+    "ResponseDescription": "Accept the service request successfully."
+  }
+}

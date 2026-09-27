@@ -18,7 +18,7 @@ let api: TestApi
 let admin: pg.Pool
 let orgId: string
 
-type Kind = 'c2b/confirmation' | 'c2b/validation' | 'stk'
+type Kind = 'c2b/confirmation' | 'c2b/validation' | 'stk' | 'result/txn' | 'result/balance' | 'timeout/txn' | 'timeout/balance'
 
 async function deliver(kind: Kind, body: unknown, secret = CALLBACK_SECRET) {
   const res = await fetch(`${api.baseUrl}/hooks/${kind}/${secret}`, {
@@ -124,6 +124,49 @@ describe('exactly one transaction per receipt', () => {
   })
 })
 
+describe('outbox', () => {
+  it('every new transaction has exactly one verification job, queued in the same database transaction', async () => {
+    const { rows } = await admin.query<{ receipt_number: string; jobs: string }>(
+      `SELECT t.receipt_number, count(j.id)::text AS jobs FROM core.mpesa_transaction t
+       LEFT JOIN jobs.jobs j ON j.task_identifier = 'verify_transaction' AND j.key = 'verify:' || t.id
+       GROUP BY t.receipt_number ORDER BY t.receipt_number`,
+    )
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.filter((r) => r.jobs !== '1')).toEqual([])
+  })
+})
+
+describe('result URLs', () => {
+  it('results and timeouts for unknown conversations are acknowledged and kept', async () => {
+    const result = { Result: { ResultType: 0, ResultCode: 0, ResultDesc: 'ok', OriginatorConversationID: 'o-1', ConversationID: 'AG_UNKNOWN_1' } }
+    for (const kind of ['result/txn', 'result/balance', 'timeout/txn'] as const) {
+      expect(await deliver(kind, result)).toEqual({ status: 200, body: { ResultCode: '0', ResultDesc: 'Accepted' } })
+    }
+    const { rows } = await admin.query<{ source: string; reason: string }>(
+      `SELECT source, reason FROM ingest.unrouted_event WHERE external_id = 'AG_UNKNOWN_1' ORDER BY source`,
+    )
+    expect(rows).toEqual([
+      { source: 'account_balance_result', reason: 'unknown_conversation' },
+      { source: 'queue_timeout', reason: 'unknown_conversation' },
+      { source: 'transaction_status_result', reason: 'unknown_conversation' },
+    ])
+  })
+
+  it('a result for a request we sent is stored with its organization and queued for the worker', async () => {
+    const { rows: sc } = await admin.query<{ id: string }>(`SELECT id FROM core.shortcode WHERE code = '600966'`)
+    await admin.query(
+      `INSERT INTO ingest.daraja_request (org_id, shortcode_id, kind, originator_conversation_id, conversation_id, status)
+       VALUES ($1, $2, 'account_balance', 'o-2', 'AG_KNOWN_2', 'accepted')`,
+      [orgId, sc[0]?.id],
+    )
+    const body = { Result: { ResultType: '0', ResultCode: '0', ResultDesc: 'ok', OriginatorConversationID: 'o-2', ConversationID: 'AG_KNOWN_2' } }
+    await deliver('result/balance', body)
+    await deliver('result/balance', body)
+    expect(await count(`ingest.inbound_event WHERE source = 'account_balance_result' AND external_id = 'AG_KNOWN_2' AND org_id = $1`, [orgId])).toBe(1)
+    expect(await count(`jobs.jobs WHERE task_identifier = 'apply_daraja_result'`)).toBe(1)
+  })
+})
+
 describe('nothing is dropped', () => {
   it('unknown shortcodes, unknown checkouts, bad payloads and bad JSON are stored once as unrouted and acknowledged', async () => {
     const unknownCheckout = payload('stk-callback-success') as { Body: { stkCallback: Record<string, unknown> } }
@@ -135,7 +178,8 @@ describe('nothing is dropped', () => {
       expect((await deliver('stk', '{not json')).status).toBe(200)
     }
     const { rows } = await admin.query<{ reason: string; n: string }>(
-      'SELECT reason, count(*)::text AS n FROM ingest.unrouted_event GROUP BY reason ORDER BY reason',
+      `SELECT reason, count(*)::text AS n FROM ingest.unrouted_event
+       WHERE source IN ('c2b_confirmation', 'stk_callback') GROUP BY reason ORDER BY reason`,
     )
     expect(rows).toEqual([
       { reason: 'invalid_payload', n: '1' },

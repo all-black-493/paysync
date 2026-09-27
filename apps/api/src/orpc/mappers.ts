@@ -56,6 +56,7 @@ export function toTransaction(
     amount: toMoney(row.amount),
     transactedAt: iso(row.transactedAt),
     status: row.status,
+    verifiedAt: row.verifiedAt ? iso(row.verifiedAt) : null,
     source: row.source,
     billRefNumber: row.billRefNumber,
     shortcode,

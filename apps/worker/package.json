@@ -8,8 +8,18 @@
     "!dist/**/*.test.*"
   ],
   "dependencies": {
+    "@paysync/daraja": "workspace:*",
     "@paysync/db": "workspace:*",
+    "@paysync/ingest": "workspace:*",
     "@paysync/platform": "workspace:*",
+    "drizzle-orm": "0.45.3",
+    "graphile-worker": "0.18.0",
+    "pg": "8.23.0",
     "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@paysync/test-utils": "workspace:*",
+    "@types/pg": "8.23.1",
+    "vitest": "4.1.11"
   }
 }

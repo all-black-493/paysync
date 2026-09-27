@@ -86,6 +86,11 @@ export async function createTestDatabase(options: CreateTestDatabaseOptions = {}
     pool(role) {
       const { url, password } = connectionFor(env, name, role)
       const pool = new pg.Pool({ ...databaseConnectionParams(url, password), max: 4 })
+      const report = (error: Error) => {
+        process.stderr.write(`test database client error: ${error.message}\n`)
+      }
+      pool.on('error', report)
+      pool.on('connect', (client) => client.on('error', report))
       pools.push(pool)
       return pool
     },

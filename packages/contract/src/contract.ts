@@ -22,6 +22,7 @@ import {
   ReconException,
   Tag,
   Transaction,
+  TransactionStatus,
   Version,
   page,
 } from './schemas.js'
@@ -98,7 +99,7 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       .input(
         z
           .object({
-            status: z.enum(['pending_verification', 'verified', 'reversed']).optional(),
+            status: TransactionStatus.optional(),
             shortcodeId: Id.optional(),
             allocated: z.enum(['none', 'partial', 'full']).optional(),
             from: IsoDateTime.optional(),

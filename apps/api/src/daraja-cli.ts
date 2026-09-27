@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto'
 import { parseArgs, inspect } from 'node:util'
-import { DarajaClient, buildScenario, loadFixtures, replay, StkCallback } from '@paysync/daraja'
+import { DarajaClient, StkCallback, buildScenario, credentialIdFor, loadFixtures, replay } from '@paysync/daraja'
 import { createDarajaTokenStore, createDb, createPool, schema, withOrg, type Db } from '@paysync/db'
 import {
   ConfigError,
@@ -184,7 +183,7 @@ async function main() {
   const db = createDb(pool)
   const client = new DarajaClient({
     environment: 'sandbox',
-    credentialId: `sandbox:${createHash('sha256').update(config.DARAJA_CONSUMER_KEY).digest('hex').slice(0, 12)}`,
+    credentialId: credentialIdFor('sandbox', config.DARAJA_CONSUMER_KEY),
     credentials: { consumerKey: config.DARAJA_CONSUMER_KEY, consumerSecret: config.DARAJA_CONSUMER_SECRET, passkey: config.DARAJA_PASSKEY },
     tokenStore: createDarajaTokenStore(pool, createSealer(config.DATA_ENCRYPTION_KEY, 'daraja-token')),
     logger,

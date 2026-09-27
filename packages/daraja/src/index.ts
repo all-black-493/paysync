@@ -2,8 +2,11 @@ export {
   DarajaClient,
   DarajaError,
   assertCallbackUrl,
+  credentialIdFor,
   normalizeMsisdn,
   type CachedToken,
+  type DarajaInitiator,
+  type ResultUrls,
   type DarajaClientOptions,
   type DarajaCredentials,
   type DarajaEnvironment,
@@ -22,6 +25,20 @@ export {
   type NormalizedStkCallback,
   type StkOutcome,
 } from './normalize.js'
-export { C2BNotification, StkCallback } from './schemas.js'
+export { C2BNotification, ConversationIds, DarajaResult, StkCallback, type PullRecord } from './schemas.js'
+export {
+  formatPullDate,
+  normalizeAccountBalanceResult,
+  normalizePullRecord,
+  normalizeTransactionStatusResult,
+  parseAccountBalance,
+  parsePullDate,
+  resultParameters,
+  type AccountBalanceResult,
+  type BalanceAccount,
+  type ResultBase,
+  type TransactionStatusResult,
+} from './results.js'
+export { createSecurityCredential, darajaCertificate } from './security.js'
 export { formatDarajaTimestamp, parseDarajaTimestamp } from './time.js'
 export { buildScenario, replay, type CallbackKind, type Delivery, type ReplayResult, type ScenarioOptions } from './simulator.js'

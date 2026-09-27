@@ -34,7 +34,7 @@ export function TransactionsPanel() {
             <td className="num">{formatKes(t.amount)}</td>
             <td className="num">{formatKes(t.unallocated)}</td>
             <td>
-              <span className={`badge ${t.status}`}>{t.status.replace('_', ' ')}</span>
+              <span className={`badge ${t.status}`}>{t.status.replaceAll('_', ' ')}</span>
             </td>
           </tr>
         ))}

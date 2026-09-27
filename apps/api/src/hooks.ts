@@ -1,9 +1,17 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { safeEqual } from '@paysync/platform'
-import { ingestC2B, ingestStkCallback, storeMalformed, type IngestDeps } from './ingest.js'
+import {
+  ingestC2B,
+  ingestDarajaResult,
+  ingestStkCallback,
+  storeMalformed,
+  type IngestDeps,
+  type IngestResult,
+  type Source,
+} from '@paysync/ingest'
 
 const MAX_BODY_BYTES = 64 * 1024
-const ROUTE = /^\/hooks\/(c2b\/validation|c2b\/confirmation|stk)\/([^/]+)$/
+const ROUTE = /^\/hooks\/(c2b\/validation|c2b\/confirmation|stk|result\/txn|result\/balance|timeout\/txn|timeout\/balance)\/([^/]+)$/
 
 export interface HookOptions extends IngestDeps {
   readonly callbackSecret: string
@@ -43,9 +51,42 @@ function clientIp(req: IncomingMessage): string {
 }
 
 // Daraja documents only the validation response; the same shape acknowledges
-// confirmations, and STK callbacks get the numeric form they use themselves.
+// confirmations and results, and STK callbacks get the numeric form they use themselves.
 const ACCEPTED_C2B = { ResultCode: '0', ResultDesc: 'Accepted' }
 const ACCEPTED_STK = { ResultCode: 0, ResultDesc: 'Accepted' }
+
+type Kind = 'c2b/validation' | 'c2b/confirmation' | 'stk' | 'result/txn' | 'result/balance' | 'timeout/txn' | 'timeout/balance'
+
+const SOURCES: Record<Kind, Source> = {
+  'c2b/validation': 'c2b_validation',
+  'c2b/confirmation': 'c2b_confirmation',
+  stk: 'stk_callback',
+  'result/txn': 'transaction_status_result',
+  'result/balance': 'account_balance_result',
+  'timeout/txn': 'queue_timeout',
+  'timeout/balance': 'queue_timeout',
+}
+
+function ingest(options: HookOptions, kind: Kind, body: unknown): Promise<IngestResult> {
+  switch (kind) {
+    case 'stk':
+      return ingestStkCallback(options, body)
+    case 'c2b/validation':
+      return ingestC2B(options, 'c2b_validation', body)
+    case 'c2b/confirmation':
+      return ingestC2B(options, 'c2b_confirmation', body)
+    case 'result/txn':
+      return ingestDarajaResult(options, 'result', 'transaction_status', body)
+    case 'result/balance':
+      return ingestDarajaResult(options, 'result', 'account_balance', body)
+    case 'timeout/txn':
+      return ingestDarajaResult(options, 'timeout', 'transaction_status', body)
+    case 'timeout/balance':
+      return ingestDarajaResult(options, 'timeout', 'account_balance', body)
+  }
+}
+
+const isKind = (value: string | undefined): value is Kind => value !== undefined && value in SOURCES
 
 /**
  * Daraja callback routes: plain HTTP, never oRPC procedures or agent tools.
@@ -59,7 +100,7 @@ export function createHookHandler(options: HookOptions) {
     const match = ROUTE.exec(path)
     const kind = match?.[1]
     const secret = match?.[2]
-    if (req.method !== 'POST' || !kind || !secret || !safeEqual(secret, options.callbackSecret)) {
+    if (req.method !== 'POST' || !isKind(kind) || !secret || !safeEqual(secret, options.callbackSecret)) {
       send(res, 404, { status: 'not_found' })
       return true
     }
@@ -69,7 +110,7 @@ export function createHookHandler(options: HookOptions) {
       return true
     }
 
-    const source = kind === 'stk' ? 'stk_callback' : kind === 'c2b/validation' ? 'c2b_validation' : 'c2b_confirmation'
+    const source = SOURCES[kind]
     const accepted = source === 'stk_callback' ? ACCEPTED_STK : ACCEPTED_C2B
     try {
       const text = await readBody(req)
@@ -81,8 +122,7 @@ export function createHookHandler(options: HookOptions) {
         send(res, 200, accepted)
         return true
       }
-      const result =
-        source === 'stk_callback' ? await ingestStkCallback(options, body) : await ingestC2B(options, source, body)
+      const result = await ingest(options, kind, body)
       options.logger.info({ source, ...result }, 'callback stored')
       send(res, 200, accepted)
     } catch (error) {

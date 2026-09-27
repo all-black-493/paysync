@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
-import { check, index, jsonb, pgSchema, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core'
+import { check, index, integer, jsonb, pgSchema, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core'
 import { bytea, createdAt, money, sameOrg, updatedAt, version } from './columns.js'
-import { shortcode } from './core.js'
+import { mpesaTransaction, shortcode } from './core.js'
 import { id, idOrgUnique, oneOf, orgId } from './columns.js'
 
 export const ingest = pgSchema('ingest')
@@ -56,6 +56,8 @@ export const stkRequest = ingest.table(
     status: text({ enum: STK_REQUEST_STATUSES }).notNull().default('initiated'),
     resultCode: text(),
     resultDesc: text(),
+    queryAttempts: integer().notNull().default(0),
+    lastQueriedAt: timestamp({ withTimezone: true }),
     createdBy: text(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -71,7 +73,13 @@ export const stkRequest = ingest.table(
   ],
 )
 
-export const UNROUTED_REASONS = ['unknown_shortcode', 'unknown_checkout', 'invalid_payload', 'malformed_json'] as const
+export const UNROUTED_REASONS = [
+  'unknown_shortcode',
+  'unknown_checkout',
+  'unknown_conversation',
+  'invalid_payload',
+  'malformed_json',
+] as const
 
 /** Callbacks we could not attribute to an organization. Kept verbatim; never dropped. */
 export const unroutedEvent = ingest.table(
@@ -98,3 +106,51 @@ export const darajaToken = ingest.table('daraja_token', {
   expiresAt: timestamp({ withTimezone: true }).notNull(),
   updatedAt: updatedAt(),
 })
+
+export const DARAJA_REQUEST_KINDS = ['transaction_status', 'account_balance'] as const
+export const DARAJA_REQUEST_STATUSES = ['initiated', 'accepted', 'completed', 'failed', 'timed_out'] as const
+
+/**
+ * An asynchronous Daraja request we sent (its result arrives on a Result URL).
+ * Recorded before the call so the result can always be routed.
+ */
+export const darajaRequest = ingest.table(
+  'daraja_request',
+  {
+    id: id(),
+    orgId: orgId(),
+    shortcodeId: uuid().notNull(),
+    kind: text({ enum: DARAJA_REQUEST_KINDS }).notNull(),
+    transactionId: uuid(),
+    receiptNumber: text(),
+    originatorConversationId: text().unique(),
+    conversationId: text().unique(),
+    status: text({ enum: DARAJA_REQUEST_STATUSES }).notNull().default('initiated'),
+    resultCode: text(),
+    resultDesc: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [
+    idOrgUnique('daraja_request_id_org_unique', t),
+    index().on(t.orgId, t.createdAt),
+    index().on(t.transactionId),
+    sameOrg('daraja_request_shortcode_fk', { column: t.shortcodeId, orgId: t.orgId }, shortcode),
+    sameOrg('daraja_request_transaction_fk', { column: t.transactionId, orgId: t.orgId }, mpesaTransaction),
+    check('daraja_request_kind', oneOf('kind', DARAJA_REQUEST_KINDS)),
+    check('daraja_request_status', oneOf('status', DARAJA_REQUEST_STATUSES)),
+  ],
+)
+
+/** How far Pull Transactions has been read for a shortcode. */
+export const pullCursor = ingest.table(
+  'pull_cursor',
+  {
+    shortcodeId: uuid().primaryKey(),
+    orgId: orgId(),
+    pulledUntil: timestamp({ withTimezone: true }).notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [sameOrg('pull_cursor_shortcode_fk', { column: t.shortcodeId, orgId: t.orgId }, shortcode)],
+)

@@ -18,7 +18,8 @@
     "@paysync/platform": "workspace:*",
     "drizzle-orm": "0.45.3",
     "pg": "8.23.0",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "graphile-worker": "0.18.0"
   },
   "devDependencies": {
     "@paysync/test-utils": "workspace:*",

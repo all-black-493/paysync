@@ -76,3 +76,67 @@ export const C2BRegisterResponse = z.object({
 })
 
 export const C2BSimulateResponse = C2BRegisterResponse
+
+/** Synchronous acknowledgement of Transaction Status and Account Balance requests. */
+export const AsyncRequestResponse = z.object({
+  OriginatorConversationID: z.string().min(1),
+  ConversationID: z.string().min(1),
+  ResponseCode: z.union([z.string(), z.number()]).transform(String),
+  ResponseDescription: z.string(),
+})
+
+const ResultParameter = z.object({
+  Key: z.string(),
+  Value: z.union([z.string(), z.number()]).optional(),
+})
+
+/** Result URL body shared by Transaction Status and Account Balance. */
+export const DarajaResult = z.object({
+  Result: z.object({
+    ResultType: z.union([z.number(), z.string()]).optional(),
+    ResultCode: z.union([z.number(), z.string()]).transform(String),
+    ResultDesc: z.string(),
+    OriginatorConversationID: z.string().min(1),
+    ConversationID: z.string().min(1),
+    TransactionID: z.string().optional(),
+    ResultParameters: z
+      .object({ ResultParameter: z.union([z.array(ResultParameter), ResultParameter]) })
+      .optional(),
+  }),
+})
+export type DarajaResult = z.infer<typeof DarajaResult>
+
+/** Enough to route a result or timeout body, whatever else it contains. */
+export const ConversationIds = z.union([
+  z.object({
+    Result: z.object({ OriginatorConversationID: z.string().min(1).max(128), ConversationID: z.string().min(1).max(128) }),
+  }),
+  z.object({ OriginatorConversationID: z.string().min(1).max(128), ConversationID: z.string().min(1).max(128) }),
+])
+
+const PullRecord = z.object({
+  transactionId: z.string().regex(/^[A-Za-z0-9]{10}$/),
+  trxDate: z.string(),
+  msisdn: z.union([z.string(), z.number()]).transform(String).optional(),
+  sender: z.string().optional(),
+  transactiontype: z.string(),
+  billreference: z.string().optional().default(''),
+  amount: z.union([z.string(), z.number()]),
+  organizationname: z.string().optional(),
+})
+export type PullRecord = z.infer<typeof PullRecord>
+
+export const PullResponse = z.object({
+  ResponseRefID: z.string().optional(),
+  ResponseCode: z.union([z.string(), z.number()]).transform(String),
+  ResponseMessage: z.string().optional(),
+  // Documented as a list of lists of records; "No transactions" is code 1001.
+  Response: z.array(z.array(PullRecord)).optional().default([]),
+})
+
+export const PullRegisterResponse = z.object({
+  ResponseRefID: z.string().optional(),
+  ResponseStatus: z.union([z.string(), z.number()]).transform(String),
+  ShortCode: z.union([z.string(), z.number()]).transform(String).optional(),
+  ResponseDescription: z.string(),
+})

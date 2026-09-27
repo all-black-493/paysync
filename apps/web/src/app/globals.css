@@ -93,6 +93,7 @@ button:disabled { opacity: 0.6; cursor: progress; }
 }
 .badge.high, .badge.partially_paid, .badge.pending_verification { background: var(--warn-bg); color: var(--warn-text); border-color: transparent; }
 .badge.paid, .badge.verified { background: var(--ok-bg); color: var(--ok-text); border-color: transparent; }
+.badge.verification_failed { color: var(--danger); border-color: var(--danger); }
 
 .untrusted { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; overflow-wrap: anywhere; }
 
