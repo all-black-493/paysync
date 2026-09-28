@@ -1,5 +1,5 @@
 import { ExpectedPayment, ReconException, fromMoney } from '@paysync/contract'
-import { CONSTRAINTS, SQLSTATE, pgConstraint, pgErrorCode, schema, withOrg, type Tx } from '@paysync/db'
+import { CONSTRAINTS, SQLSTATE, pgConstraint, pgErrorCode, postInvoice, schema, withOrg, type Tx } from '@paysync/db'
 import { and, asc, count, desc, eq, gt, gte, inArray, lt, ne, or, sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 import { authed, os } from './base.js'
@@ -161,6 +161,14 @@ const expectedCreate = authed.expected.create.handler(async ({ context, input, e
           })
           .returning()
         if (!row) throw new Error('insert returned no row')
+        await postInvoice(tx, {
+          orgId: row.orgId,
+          key: `invoice:${row.id}`,
+          reference: row.reference,
+          delta: row.amountDue,
+          createdBy: context.caller.actorId,
+          reason: 'invoice',
+        })
         return { result: toExpectedPayment(row, 0n), changed: true }
       },
     })
@@ -218,12 +226,21 @@ const expectedUpdate = authed.expected.update.handler(async ({ context, input, e
         if (input.payerLabel !== undefined && input.payerLabel !== row.payerLabel) changes.payerLabel = input.payerLabel
 
         if (Object.keys(changes).length === 0) return { result: toExpectedPayment(row, paid), changed: false }
+        if (changes.amountDue !== undefined && paid > 0n) changes.status = changes.amountDue === paid ? 'paid' : 'partially_paid'
         const [updated] = await tx
           .update(expectedPayment)
           .set({ ...changes, version: row.version + 1 })
           .where(eq(expectedPayment.id, row.id))
           .returning()
         if (!updated) throw new Error('update returned no row')
+        await postInvoice(tx, {
+          orgId: updated.orgId,
+          key: `invoice:${updated.id}:v${updated.version}`,
+          reference: updated.reference,
+          delta: updated.amountDue - row.amountDue,
+          createdBy: context.caller.actorId,
+          reason: 'adjustment',
+        })
         return { result: toExpectedPayment(updated, paid), changed: true }
       },
     })

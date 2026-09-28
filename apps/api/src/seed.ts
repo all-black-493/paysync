@@ -1,7 +1,8 @@
 import { inspect } from 'node:util'
 import type { RoleName } from '@paysync/auth'
 import { createAuth, type Auth } from './auth.js'
-import { allocate, createDb, createPool, postReceipt, schema, withOrg, type Db } from '@paysync/db'
+import { createDb, createPool, postInvoice, postReceipt, schema, withOrg, type Db } from '@paysync/db'
+import { applyMatch } from '@paysync/matching'
 import { ConfigError, DATABASE_SECRETS, commonEnvShape, createLogger, databaseEnvShape, loadConfig } from '@paysync/platform'
 import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
@@ -119,7 +120,9 @@ async function seedOrg(auth: Auth, db: Db, plan: OrgPlan, password: string): Pro
           createdBy: userIds.get(ownerEmail),
         })
         .returning({ id: schema.expectedPayment.id })
-      if (row) expectedIds.set(e.reference, row.id)
+      if (!row) continue
+      expectedIds.set(e.reference, row.id)
+      await postInvoice(tx, { orgId, key: `invoice:${row.id}`, reference: e.reference, delta: e.amount, createdBy: 'seed', reason: 'invoice' })
     }
     for (const p of plan.payments) {
       const [txRow] = await tx
@@ -140,22 +143,16 @@ async function seedOrg(auth: Auth, db: Db, plan: OrgPlan, password: string): Pro
       await postReceipt(tx, { orgId, transactionId: txRow.id, receiptNumber: p.receipt, amount: p.amount, createdBy: 'seed' })
       const target = p.allocateTo ? expectedIds.get(p.allocateTo) : undefined
       if (target) {
-        const [m] = await tx
-          .insert(schema.match)
-          .values({ orgId, transactionId: txRow.id, method: 'manual', actorUserId: userIds.get(ownerEmail) })
-          .returning({ id: schema.match.id })
-        if (m) {
-          await allocate(tx, {
-            orgId,
-            transactionId: txRow.id,
-            matchId: m.id,
-            parts: [{ expectedPaymentId: target, amount: p.amount }],
-          })
+        await applyMatch(tx, {
+          orgId,
+          transactionId: txRow.id,
+          method: 'manual',
+          parts: [{ expectedPaymentId: target, amount: p.amount }],
+          actorUserId: userIds.get(ownerEmail) ?? null,
+          createdBy: 'seed',
+        })
+        {
           const due = plan.expected.find((e) => e.reference === p.allocateTo)?.amount ?? 0n
-          await tx
-            .update(schema.expectedPayment)
-            .set({ status: p.amount >= due ? 'paid' : 'partially_paid', version: 2 })
-            .where(eq(schema.expectedPayment.id, target))
           if (p.amount < due) {
             await tx.insert(schema.exception).values({
               orgId,

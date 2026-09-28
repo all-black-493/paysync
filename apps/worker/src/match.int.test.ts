@@ -82,23 +82,19 @@ describe('matching after verification', () => {
     expect(await matchesOf(t)).toEqual([{ method: 'rule', expected_payment_id: e, amount: '9000' }])
   })
 
-  it('partial: allocated, expected partially paid, a partial_payment exception to chase the balance', async () => {
+  it('partial: nothing allocated, a partial_payment exception for a person to decide', async () => {
     const e = await expected('RENT-A1-OCT', 300_00n)
     const t = await pay('RKL51ZDRM3', '100.00', 'rent a1 oct')
-    expect(await matchesOf(t)).toEqual([{ method: 'rule', expected_payment_id: e, amount: '10000' }])
-    expect(await stateOf(e)).toEqual({ status: 'partially_paid', paid: '10000' })
+    expect(await matchesOf(t)).toEqual([])
+    expect(await stateOf(e)).toEqual({ status: 'open', paid: '0' })
     expect(await exceptionsOf(t)).toEqual([{ kind: 'partial_payment', priority: 'normal' }])
-
-    // The balance later arrives: the exact tier now closes it.
-    const t2 = await pay('RKL51ZDRM4', '200.00', 'RENT-A1-OCT')
-    expect(await matchesOf(t2)).toEqual([{ method: 'exact', expected_payment_id: e, amount: '20000' }])
-    expect(await stateOf(e)).toEqual({ status: 'paid', paid: '30000' })
   })
 
-  it('overpayment: the amount due is allocated, the rest stays unallocated and flagged', async () => {
+  it('overpayment: nothing allocated, an overpayment exception for a person to decide', async () => {
     const e = await expected('INV-2001', 50_00n)
     const t = await pay('RKL51ZDRM5', '80.00', 'INV-2001')
-    expect(await matchesOf(t)).toEqual([{ method: 'rule', expected_payment_id: e, amount: '5000' }])
+    expect(await matchesOf(t)).toEqual([])
+    expect(await stateOf(e)).toEqual({ status: 'open', paid: '0' })
     expect(await exceptionsOf(t)).toEqual([{ kind: 'overpayment', priority: 'normal' }])
   })
 

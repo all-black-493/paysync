@@ -28,10 +28,11 @@ export interface MatchPolicy {
   readonly allocateOverpayment: boolean
 }
 
+/** Owner decision (2026-09-28): partial and over payments wait for a person. */
 export const DEFAULT_MATCH_POLICY: MatchPolicy = {
   dateWindowDays: 120,
-  allocatePartial: true,
-  allocateOverpayment: true,
+  allocatePartial: false,
+  allocateOverpayment: false,
 }
 
 export type FollowUp = 'partial_payment' | 'overpayment'

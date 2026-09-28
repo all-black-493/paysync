@@ -41,4 +41,4 @@ export {
   type JobName,
   type JobPayload,
 } from './jobs.js'
-export { RECEIPT_ACCOUNTS, ensureAccount, postReceipt, raiseException } from './receipts.js'
+export { RECEIPT_ACCOUNTS, ensureAccount, postInvoice, postReceipt, raiseException } from './receipts.js'

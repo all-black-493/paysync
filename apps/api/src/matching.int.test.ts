@@ -205,3 +205,37 @@ describe('exceptions.resolve', () => {
     expect((await client('clerk').exceptions.list({})).items.map((x) => x.id)).not.toContain(id)
   })
 })
+
+describe('invoices in the ledger', () => {
+  async function receivableLines(keyPattern: string) {
+    const { rows } = await admin.query<{ kind: string; amount: string }>(
+      `SELECT j.kind, en.amount::text FROM ledger.journal j JOIN ledger.entry en ON en.journal_id = j.id
+       JOIN ledger.account a ON a.id = en.account_id
+       WHERE a.code = 'receivables' AND j.idempotency_key LIKE $1 ORDER BY j.created_at`,
+      [keyPattern],
+    )
+    return rows
+  }
+
+  it('an expected payment posts an invoice, changes post the difference, and payment settles the receivable', async () => {
+    const created = await client('clerk').expected.create({ reference: 'INV-9100', amountDue: kes(1000), idempotencyKey: key('e') })
+    const id = created.result.id
+    await client('clerk').expected.update({ id, version: created.result.version, amountDue: kes(1200), idempotencyKey: key('u') })
+    expect(await receivableLines(`invoice:${id}%`)).toEqual([
+      { kind: 'invoice', amount: '1000' },
+      { kind: 'invoice_adjustment', amount: '200' },
+    ])
+
+    const t = await payment(1200, 'INV-9100')
+    const { version } = await client('clerk').transactions.get({ id: t })
+    const done = await client('clerk').matches.confirm({ transactionId: t, version, allocations: [{ expectedPaymentId: id, amount: kes(1200) }], idempotencyKey: key('m') })
+    expect(await receivableLines(`allocation:${done.result.id}`)).toEqual([{ kind: 'allocation', amount: '-1200' }])
+    const { rows } = await admin.query<{ balance: string }>(
+      `SELECT sum(en.amount)::text AS balance FROM ledger.entry en JOIN ledger.journal j ON j.id = en.journal_id
+       JOIN ledger.account a ON a.id = en.account_id
+       WHERE a.code = 'receivables' AND (j.idempotency_key LIKE $1 OR j.idempotency_key = $2)`,
+      [`invoice:${id}%`, `allocation:${done.result.id}`],
+    )
+    expect(rows[0]?.balance).toBe('0')
+  })
+})

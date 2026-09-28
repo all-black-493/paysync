@@ -104,7 +104,7 @@ export interface ApplyMatchInput {
  * The only writer of allocations. Locks the transaction, then the expected
  * payments in id order (no deadlocks between concurrent matches), re-checks
  * every amount against what is still due, updates statuses, and moves the
- * amount from unallocated to applied receipts in the ledger.
+ * amount from unallocated receipts to the invoices it settles (receivables).
  */
 export async function applyMatch(tx: Tx, input: ApplyMatchInput): Promise<{ matchId: string }> {
   if (input.parts.length === 0) throw new MatchError('EXCEEDS_AMOUNT', 'a match needs at least one allocation')
@@ -161,8 +161,9 @@ export async function applyMatch(tx: Tx, input: ApplyMatchInput): Promise<{ matc
     .set({ version: payment.version + 1 })
     .where(eq(mpesaTransaction.id, input.transactionId))
 
+  // Unallocated receipts settle the invoices they pay.
   const suspense = await ensureAccount(tx, input.orgId, RECEIPT_ACCOUNTS.suspense)
-  const applied = await ensureAccount(tx, input.orgId, RECEIPT_ACCOUNTS.applied)
+  const receivables = await ensureAccount(tx, input.orgId, RECEIPT_ACCOUNTS.receivables)
   await postJournal(tx, {
     orgId: input.orgId,
     kind: 'allocation',
@@ -172,7 +173,7 @@ export async function applyMatch(tx: Tx, input: ApplyMatchInput): Promise<{ matc
     createdBy: input.createdBy,
     lines: [
       { accountId: suspense, amount: total },
-      { accountId: applied, amount: -total },
+      { accountId: receivables, amount: -total },
     ],
   })
   return { matchId: created.id }
@@ -187,7 +188,7 @@ export async function resolveMatchExceptions(tx: Tx, transactionId: string, note
       and(
         eq(exception.transactionId, transactionId),
         eq(exception.status, 'open'),
-        inArray(exception.kind, ['no_match', 'low_confidence', 'duplicate']),
+        inArray(exception.kind, ['no_match', 'low_confidence', 'duplicate', 'partial_payment', 'overpayment']),
       ),
     )
     .returning({ id: exception.id })

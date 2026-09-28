@@ -9,7 +9,8 @@ type AccountKind = (typeof ledgerAccount.$inferInsert)['kind']
 export const RECEIPT_ACCOUNTS = {
   float: { code: 'mpesa_float', name: 'M-Pesa float', kind: 'asset' },
   suspense: { code: 'suspense', name: 'Unallocated receipts', kind: 'liability' },
-  applied: { code: 'applied_receipts', name: 'Receipts applied to expected payments', kind: 'liability' },
+  receivables: { code: 'receivables', name: 'Receivables', kind: 'asset' },
+  income: { code: 'invoiced_income', name: 'Invoiced income', kind: 'income' },
 } as const satisfies Record<string, { code: string; name: string; kind: AccountKind }>
 
 export async function ensureAccount(
@@ -51,6 +52,33 @@ export async function postReceipt(
     lines: [
       { accountId: float, amount: input.amount },
       { accountId: suspense, amount: -input.amount },
+    ],
+  })
+}
+
+/**
+ * An expected payment is an invoice: receivables up, invoiced income up.
+ * `delta` is the change in amount due (the full amount when created,
+ * a difference on edits, minus the unpaid rest when voided); `key` makes
+ * each posting happen once.
+ */
+export async function postInvoice(
+  tx: Tx,
+  input: { orgId: string; key: string; reference: string; delta: bigint; createdBy: string; reason: 'invoice' | 'adjustment' | 'void' },
+): Promise<void> {
+  if (input.delta === 0n) return
+  const receivables = await ensureAccount(tx, input.orgId, RECEIPT_ACCOUNTS.receivables)
+  const income = await ensureAccount(tx, input.orgId, RECEIPT_ACCOUNTS.income)
+  const labels = { invoice: 'Invoice', adjustment: 'Invoice adjustment', void: 'Invoice voided' } as const
+  await postJournal(tx, {
+    orgId: input.orgId,
+    kind: input.reason === 'invoice' ? 'invoice' : `invoice_${input.reason}`,
+    description: `${labels[input.reason]} ${input.reference}`,
+    idempotencyKey: input.key,
+    createdBy: input.createdBy,
+    lines: [
+      { accountId: receivables, amount: input.delta },
+      { accountId: income, amount: -input.delta },
     ],
   })
 }

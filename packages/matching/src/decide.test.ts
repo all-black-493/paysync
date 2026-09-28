@@ -80,8 +80,23 @@ describe('decide: rules tier', () => {
     })
   })
 
-  it('partial payment → allocate all of it and flag the balance', () => {
+  const allocating = { ...DEFAULT_MATCH_POLICY, allocatePartial: true, allocateOverpayment: true }
+
+  it('by default, partial and over payments wait for a person', () => {
     expect(decide(payment('INV-0042', 3000n), [candidate('a', 'INV-0042', 5000n)])).toMatchObject({
+      kind: 'exception',
+      exception: 'partial_payment',
+      candidateIds: ['a'],
+    })
+    expect(decide(payment('INV-0042', 7000n), [candidate('a', 'INV-0042', 5000n)])).toMatchObject({
+      kind: 'exception',
+      exception: 'overpayment',
+      candidateIds: ['a'],
+    })
+  })
+
+  it('allocating policy: partial payment → allocate all of it and flag the balance', () => {
+    expect(decide(payment('INV-0042', 3000n), [candidate('a', 'INV-0042', 5000n)], allocating)).toMatchObject({
       kind: 'match',
       method: 'rule',
       amount: 3000n,
@@ -89,18 +104,12 @@ describe('decide: rules tier', () => {
     })
   })
 
-  it('overpayment → allocate the amount due, leave the rest unallocated, flag it', () => {
-    expect(decide(payment('INV-0042', 7000n), [candidate('a', 'INV-0042', 5000n)])).toMatchObject({
+  it('allocating policy: overpayment → allocate the amount due, leave the rest unallocated, flag it', () => {
+    expect(decide(payment('INV-0042', 7000n), [candidate('a', 'INV-0042', 5000n)], allocating)).toMatchObject({
       kind: 'match',
       amount: 5000n,
       followUp: 'overpayment',
     })
-  })
-
-  it('policy can send partial and over payments to a human instead', () => {
-    const policy = { ...DEFAULT_MATCH_POLICY, allocatePartial: false, allocateOverpayment: false }
-    expect(decide(payment('INV-0042', 3000n), [candidate('a', 'INV-0042', 5000n)], policy)).toMatchObject({ kind: 'exception', exception: 'partial_payment' })
-    expect(decide(payment('INV-0042', 7000n), [candidate('a', 'INV-0042', 5000n)], policy)).toMatchObject({ kind: 'exception', exception: 'overpayment' })
   })
 
   it('only the unallocated part of the payment is considered', () => {
@@ -160,6 +169,8 @@ describe('decide: exceptions', () => {
 })
 
 describe('decide: invariants (property)', () => {
+  // The permissive policy exercises the most allocation paths.
+  const allocatingPolicy = { ...DEFAULT_MATCH_POLICY, allocatePartial: true, allocateOverpayment: true }
   const refs = fc.constantFrom('INV-0042', 'inv42', '42', 'ACC-42', 'UNIT-A1', 'unit a1', 'A1', 'X-9', '')
   const status = fc.constantFrom<Candidate['status']>('open', 'partially_paid', 'paid', 'void')
   const cand = fc
@@ -179,7 +190,7 @@ describe('decide: invariants (property)', () => {
         fc.uniqueArray(cand, { minLength: 0, maxLength: 6, selector: (c) => c.id }),
         (reference, amount, allocatedRaw, candidates) => {
           const allocated = allocatedRaw > amount ? amount : allocatedRaw
-          const decision = decide(payment(reference, amount, allocated), candidates)
+          const decision = decide(payment(reference, amount, allocated), candidates, allocatingPolicy)
           if (decision.kind !== 'match') return
           const chosen = candidates.find((c) => c.id === decision.expectedPaymentId)
           expect(chosen).toBeDefined()
