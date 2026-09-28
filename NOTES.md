@@ -62,9 +62,15 @@ The recovery tests run real Postgres 18 and graphile-worker's own `runOnce`; onl
 
 The owner added a third-party Daraja skill (`.claude/skills/...mpesa-daraja`). Where it differs from the portal or AGENTS.md we follow those: it says to always answer callbacks 200 even if processing fails (we answer 500 when the payload was not stored, §5.3.7); it uses `/mpesa/c2b/v1/registerurl` (portal documents v2); its `test_credentials` link is a 404; its claim that the sandbox callback delivery is unreliable is **[VERIFY]**.
 
+### Tunnel session (2026-09-28, after M3)
+
+- ngrok authtoken copied from the owner's ngrok CLI config into `secrets/ngrok_authtoken`; tunnel at the static dev domain `https://salvatore-mythical-dishonorably.ngrok-free.dev` (`CALLBACK_BASE_URL` in `.env`).
+- The tunnel now only forwards `/hooks/*` (ngrok traffic policy; everything else gets ngrok's empty 404), so the web app and API are not public. Checked from outside: `/` and `/api/rpc` → ngrok 404; `/hooks/stk/<wrong>` → our 404 body.
+- **C2B Register URL was down for 30+ minutes**: v1 and v2, with `example.com` and with the ngrok URL alike → HTTP 500 `500.003.1001` "Service is currently unreachable. Please try again later." A sandbox outage, not an ngrok block. Retry `make daraja ARGS=register-c2b`.
+- The worker sent 3 real Transaction Status requests through the Result URL at 23:50 UTC (accepted, `ResponseCode "0"`), with the placeholder initiator password. **No result or timeout reached the tunnel within 25 minutes.** Either Daraja sends nothing for a rejected credential or sandbox results are slow; re-check with the real test password. The payments stay pending (as designed); the sweep gives up after 12 attempts with an exception.
+
 ### Still to verify / owner actions
 
-- **ngrok:** `secrets/ngrok_authtoken` is still the random placeholder from `make secrets` (ngrok says `ERR_NGROK_105`). With a real authtoken: `make tunnel`, set `CALLBACK_BASE_URL`, `make up`, `make daraja ARGS=register-c2b`, `make daraja ARGS="simulate-c2b --amount 10 --ref TEST"` → the worker sends Transaction Status and the real result arrives. `make tunnel` now also exposes the ngrok inspector on 127.0.0.1:4040 (it listened only inside the container before).
 - **Initiator password:** `secrets/daraja_initiator_password` is a random placeholder; put the sandbox app's test initiator password there (Daraja simulator → test credentials).
 - Pull Transactions access (production shortcode registration) and the real Transaction Status / balance / timeout result payloads.
 - Balance variance counts withdrawals, settlement charges and reversals as variance until those flows are ingested (statement import); expect false positives on days with withdrawals.
