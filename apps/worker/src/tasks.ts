@@ -3,6 +3,7 @@ import type { Job, Task, TaskList } from 'graphile-worker'
 import { z } from 'zod'
 import { requestBalance } from './balance.js'
 import type { WorkerDeps } from './deps.js'
+import { matchTransaction } from './match.js'
 import { pullTransactions } from './pull.js'
 import { applyDarajaResult } from './results.js'
 import { checkStkRequest } from './stk.js'
@@ -28,6 +29,7 @@ export function taskList(deps: WorkerDeps): TaskList {
     check_stk_request: job(deps, JOB_PAYLOADS.check_stk_request, checkStkRequest),
     pull_transactions: job(deps, JOB_PAYLOADS.pull_transactions, pullTransactions),
     request_balance: job(deps, JOB_PAYLOADS.request_balance, requestBalance),
+    match_transaction: job(deps, JOB_PAYLOADS.match_transaction, matchTransaction),
     sweep_unverified: cron(deps, sweepUnverified),
     sweep_stk_requests: cron(deps, sweepStkRequests),
     sweep_pull: cron(deps, sweepPull),

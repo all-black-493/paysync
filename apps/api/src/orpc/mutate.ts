@@ -54,6 +54,8 @@ export interface MutationOptions<T> {
   readonly run: (tx: Tx) => Promise<{ readonly result: T; readonly changed: boolean }>
   /** What to keep for idempotent replay; strip one-time secrets here. */
   readonly stored?: (preview: Preview<T>) => Preview<T>
+  /** Serializable for allocation paths; retried on serialization failures. */
+  readonly isolation?: 'read committed' | 'serializable'
 }
 
 /**
@@ -106,7 +108,7 @@ export async function mutate<T>(options: MutationOptions<T>): Promise<Preview<T>
         outcome: changed ? 'changed' : 'unchanged',
       })
       return preview
-    })
+    }, { isolation: options.isolation ?? 'read committed' })
 
   try {
     return await attempt()

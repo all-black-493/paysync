@@ -12,6 +12,7 @@ import {
   toTransaction,
 } from './mappers.js'
 import { apiKeyProcedures } from './api-keys.js'
+import { exceptionsResolve, matchingProcedures } from './matching.js'
 import { mutate } from './mutate.js'
 import { allocatedByTransaction, paidByExpectedPayment, toBigInt } from './queries.js'
 
@@ -368,8 +369,8 @@ export const router = os.router({
   me: { get: me },
   transactions: { list: transactionsList, get: transactionsGet },
   expected: { list: expectedList, get: expectedGet, create: expectedCreate, update: expectedUpdate },
-  exceptions: { list: exceptionsList, get: exceptionsGet, annotate: exceptionsAnnotate },
-  matches: { list: matchesList },
+  exceptions: { list: exceptionsList, get: exceptionsGet, annotate: exceptionsAnnotate, resolve: exceptionsResolve },
+  matches: { list: matchesList, ...matchingProcedures },
   reports: { dailySummary },
 })
 

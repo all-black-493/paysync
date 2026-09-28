@@ -1,4 +1,4 @@
-import { postReceipt, raiseException, schema, type Tx } from '@paysync/db'
+import { enqueueJob, postReceipt, raiseException, schema, type Tx } from '@paysync/db'
 import { and, eq, sql } from 'drizzle-orm'
 
 const { mpesaTransaction } = schema
@@ -30,6 +30,7 @@ export async function markVerified(tx: Tx, transactionId: string, method: Verifi
     amount: row.amount,
     createdBy: `verification:${method}`,
   })
+  await enqueueJob(tx, 'match_transaction', { orgId: row.orgId, transactionId: row.id }, { jobKey: `match:${row.id}` })
   return true
 }
 

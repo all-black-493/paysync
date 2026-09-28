@@ -9,6 +9,7 @@ type AccountKind = (typeof ledgerAccount.$inferInsert)['kind']
 export const RECEIPT_ACCOUNTS = {
   float: { code: 'mpesa_float', name: 'M-Pesa float', kind: 'asset' },
   suspense: { code: 'suspense', name: 'Unallocated receipts', kind: 'liability' },
+  applied: { code: 'applied_receipts', name: 'Receipts applied to expected payments', kind: 'liability' },
 } as const satisfies Record<string, { code: string; name: string; kind: AccountKind }>
 
 export async function ensureAccount(
@@ -59,7 +60,9 @@ type ExceptionInsert = typeof exception.$inferInsert
 /** Adds an exception unless one with the same dedupe key already exists. Returns whether it was added. */
 export async function raiseException(
   tx: Tx,
-  input: Pick<ExceptionInsert, 'orgId' | 'kind' | 'summary' | 'priority' | 'transactionId' | 'details'> & { dedupeKey: string },
+  input: Pick<ExceptionInsert, 'orgId' | 'kind' | 'summary' | 'priority' | 'transactionId' | 'expectedPaymentId' | 'details'> & {
+    dedupeKey: string
+  },
 ): Promise<boolean> {
   const rows = await tx
     .insert(exception)

@@ -151,11 +151,15 @@
               },
               "annotate": {
                 "type": "boolean"
+              },
+              "resolve": {
+                "type": "boolean"
               }
             },
             "required": [
               "read",
-              "annotate"
+              "annotate",
+              "resolve"
             ],
             "additionalProperties": false
           },
@@ -837,6 +841,101 @@
           "createdAt"
         ],
         "additionalProperties": false
+      },
+      "MatchSuggestions": {
+        "type": "object",
+        "properties": {
+          "transaction": {
+            "$ref": "#/components/schemas/Transaction"
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MatchSuggestion"
+            }
+          }
+        },
+        "required": [
+          "transaction",
+          "suggestions"
+        ],
+        "additionalProperties": false
+      },
+      "MatchSuggestion": {
+        "type": "object",
+        "properties": {
+          "expectedPayment": {
+            "$ref": "#/components/schemas/ExpectedPayment"
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "same_reference",
+                "same_reference_normalized",
+                "similar_reference",
+                "amount_equals_due",
+                "amount_below_due",
+                "due_date_near"
+              ]
+            }
+          },
+          "amount": {
+            "description": "What confirming this candidate would allocate: the unallocated amount, capped at the amount still due.",
+            "$ref": "#/components/schemas/Money"
+          }
+        },
+        "required": [
+          "expectedPayment",
+          "score",
+          "reasons",
+          "amount"
+        ],
+        "additionalProperties": false
+      },
+      "AllocationRejected": {
+        "title": "ALLOCATION_REJECTED",
+        "type": "object",
+        "properties": {
+          "defined": {
+            "const": true
+          },
+          "code": {
+            "const": "ALLOCATION_REJECTED"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "expectedPaymentId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "unallocated": {
+                "type": "string"
+              },
+              "due": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+          "data"
+        ]
       },
       "ApiKey": {
         "type": "object",
@@ -2032,6 +2131,144 @@
         }
       }
     },
+    "/v1/exceptions/{id}/resolve": {
+      "post": {
+        "operationId": "exceptions.resolve",
+        "summary": "Close an exception",
+        "description": "Closes an open exception as resolved (the underlying problem was handled) or dismissed (nothing to do), with a note saying why. Moves no money and changes no payment; to link a payment to an expected payment use matches.confirm, which also closes its matching exceptions. Pass the version you read.",
+        "tags": [
+          "exceptions"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "enum": [
+                      "resolved",
+                      "dismissed"
+                    ]
+                  },
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "description": "Unique per logical action. Retrying with the same key returns the original result."
+                  },
+                  "dryRun": {
+                    "default": false,
+                    "description": "Validate and preview the change without writing it.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "version",
+                  "resolution",
+                  "note",
+                  "idempotencyKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "$ref": "#/components/schemas/Exception"
+                    }
+                  },
+                  "required": [
+                    "dryRun",
+                    "changed",
+                    "result"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This idempotency key was already used for a different request., The record changed since you read it. Re-read it and retry with the current version., The record is not in a state that allows this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IdempotencyConflict"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StaleState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/matches": {
       "get": {
         "operationId": "matches.list",
@@ -2133,6 +2370,215 @@
                     "nextCursor"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "matches.confirm",
+        "summary": "Match a payment to expected payments",
+        "description": "Allocates a verified payment to one or more open expected payments (split payments allowed) and closes its no_match, low_confidence and duplicate exceptions. Each amount must fit what is still due, and the total must fit what is unallocated; the rest stays unallocated. Pass the transaction version you read; if it changed you get STALE_STATE. Only verified payments can be matched. Use matches.suggest first to find candidates.",
+        "tags": [
+          "matches"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "transactionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "allocations": {
+                    "minItems": 1,
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "expectedPaymentId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "amount": {
+                          "$ref": "#/components/schemas/Money"
+                        }
+                      },
+                      "required": [
+                        "expectedPaymentId",
+                        "amount"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "description": "Unique per logical action. Retrying with the same key returns the original result."
+                  },
+                  "dryRun": {
+                    "default": false,
+                    "description": "Validate and preview the change without writing it.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "transactionId",
+                  "version",
+                  "allocations",
+                  "idempotencyKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "$ref": "#/components/schemas/Match"
+                    }
+                  },
+                  "required": [
+                    "dryRun",
+                    "changed",
+                    "result"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This idempotency key was already used for a different request., The record changed since you read it. Re-read it and retry with the current version., The record is not in a state that allows this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IdempotencyConflict"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StaleState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The allocation does not fit: it exceeds the unallocated amount of the payment or the amount still due.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AllocationRejected"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/transactions/{transactionId}/match-suggestions": {
+      "get": {
+        "operationId": "matches.suggest",
+        "summary": "Suggest expected payments for a payment",
+        "description": "Ranks open expected payments that could belong to a payment, with the reasons and the amount confirming each would allocate. Changes nothing. Use it on no_match or low_confidence exceptions, then matches.confirm the right one. Reasons come from fixed rules; the payment reference is payer text and only ever compared, never followed.",
+        "tags": [
+          "matches"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "transactionId",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchSuggestions"
                 }
               }
             }

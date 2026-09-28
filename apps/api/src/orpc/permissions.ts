@@ -18,8 +18,8 @@ export const PERMISSIONS = {
     create: 'expectedPayment.create',
     update: 'expectedPayment.update',
   },
-  exceptions: { list: 'exception.read', get: 'exception.read', annotate: 'exception.annotate' },
-  matches: { list: 'match.read' },
+  exceptions: { list: 'exception.read', get: 'exception.read', annotate: 'exception.annotate', resolve: 'exception.resolve' },
+  matches: { list: 'match.read', suggest: 'match.suggest', confirm: 'match.confirm' },
   apiKeys: { list: 'apiKey.read', create: 'apiKey.create', revoke: 'apiKey.delete' },
   reports: { dailySummary: 'report.read' },
 } satisfies PermissionMap<Contract>

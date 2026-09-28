@@ -82,6 +82,9 @@ button:disabled { opacity: 0.6; cursor: progress; }
 .row { display: grid; gap: 8px; }
 .row-main { display: flex; gap: 12px; align-items: flex-start; }
 .note { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--border); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.match-panel { border-top: 1px solid var(--border); padding-top: 12px; }
+.match-panel label { display: grid; gap: 4px; }
 
 .inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .inline-form textarea { flex: 1 1 280px; }

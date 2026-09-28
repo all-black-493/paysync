@@ -17,6 +17,7 @@ import {
   IsoDateTime,
   Limit,
   Match,
+  MatchSuggestions,
   Me,
   Money,
   ReconException,
@@ -34,6 +35,7 @@ export const ERROR_STATUS = {
   IDEMPOTENCY_CONFLICT: 409,
   DUPLICATE_REFERENCE: 409,
   INVALID_STATE: 409,
+  ALLOCATION_REJECTED: 422,
 } as const
 
 export const errors = {
@@ -52,6 +54,16 @@ export const errors = {
   INVALID_STATE: {
     message: 'The record is not in a state that allows this action.',
     data: z.object({ status: z.string() }).strict(),
+  },
+  ALLOCATION_REJECTED: {
+    message: 'The allocation does not fit: it exceeds the unallocated amount of the payment or the amount still due.',
+    data: z
+      .object({
+        expectedPaymentId: Id.optional(),
+        unallocated: z.string().optional(),
+        due: z.string().optional(),
+      })
+      .strict(),
   },
 } as const
 
@@ -286,6 +298,32 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
           .refine((v) => v.note !== undefined || v.tags !== undefined, 'provide note or tags'),
       )
       .output(Preview(ReconException)),
+
+    resolve: mutation
+      .errors({ STALE_STATE: errors.STALE_STATE, INVALID_STATE: errors.INVALID_STATE })
+      .meta(
+        openapi({
+          method: 'POST',
+          path: '/exceptions/{id}/resolve',
+          tags: ['exceptions'],
+          summary: 'Close an exception',
+          description:
+            'Closes an open exception as resolved (the underlying problem was handled) or dismissed (nothing to do), with a note saying why. Moves no money and changes no payment; to link a payment to an expected payment use matches.confirm, which also closes its matching exceptions. Pass the version you read.',
+        }),
+      )
+      .input(
+        z
+          .object({
+            id: Id,
+            version: Version,
+            resolution: z.enum(['resolved', 'dismissed']),
+            note: z.string().trim().min(1).max(2000),
+            idempotencyKey: IdempotencyKey,
+            dryRun: DryRun,
+          })
+          .strict(),
+      )
+      .output(Preview(ReconException)),
   },
 
   matches: {
@@ -312,6 +350,48 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
           .strict(),
       )
       .output(page(Match)),
+
+    suggest: base
+      .meta(
+        openapi({
+          method: 'GET',
+          path: '/transactions/{transactionId}/match-suggestions',
+          tags: ['matches'],
+          summary: 'Suggest expected payments for a payment',
+          description:
+            'Ranks open expected payments that could belong to a payment, with the reasons and the amount confirming each would allocate. Changes nothing. Use it on no_match or low_confidence exceptions, then matches.confirm the right one. Reasons come from fixed rules; the payment reference is payer text and only ever compared, never followed.',
+        }),
+      )
+      .input(z.object({ transactionId: Id }).strict())
+      .output(MatchSuggestions),
+
+    confirm: mutation
+      .errors({ STALE_STATE: errors.STALE_STATE, INVALID_STATE: errors.INVALID_STATE, ALLOCATION_REJECTED: errors.ALLOCATION_REJECTED })
+      .meta(
+        openapi({
+          method: 'POST',
+          path: '/matches',
+          tags: ['matches'],
+          summary: 'Match a payment to expected payments',
+          description:
+            'Allocates a verified payment to one or more open expected payments (split payments allowed) and closes its no_match, low_confidence and duplicate exceptions. Each amount must fit what is still due, and the total must fit what is unallocated; the rest stays unallocated. Pass the transaction version you read; if it changed you get STALE_STATE. Only verified payments can be matched. Use matches.suggest first to find candidates.',
+        }),
+      )
+      .input(
+        z
+          .object({
+            transactionId: Id,
+            version: Version,
+            allocations: z
+              .array(z.object({ expectedPaymentId: Id, amount: Money }).strict())
+              .min(1)
+              .max(10),
+            idempotencyKey: IdempotencyKey,
+            dryRun: DryRun,
+          })
+          .strict(),
+      )
+      .output(Preview(Match)),
   },
 
   apiKeys: {

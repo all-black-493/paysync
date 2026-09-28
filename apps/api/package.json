@@ -19,6 +19,7 @@
     "@paysync/daraja": "workspace:*",
     "@paysync/db": "workspace:*",
     "@paysync/ingest": "workspace:*",
+    "@paysync/matching": "workspace:*",
     "@paysync/platform": "workspace:*",
     "better-auth": "1.7.6",
     "drizzle-orm": "0.45.3",

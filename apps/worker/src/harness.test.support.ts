@@ -1,5 +1,6 @@
 import { DarajaClient, fixture, type CachedToken, type PullRecord, type TokenStore } from '@paysync/daraja'
 import { JOB_SCHEMA, createDb, graphileLogger, type Db } from '@paysync/db'
+import { DEFAULT_MATCH_POLICY } from '@paysync/matching'
 import type { IngestDeps } from '@paysync/ingest'
 import { createLogger, createSealer } from '@paysync/platform'
 import { createOrganization, createTestDatabase, type TestDatabase } from '@paysync/test-utils'
@@ -135,6 +136,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     }),
     resultUrls: options.resultUrls === false ? null : resultUrlsFor('https://paysync.example', SECRET),
     policy: { ...DEFAULT_POLICY, ...options.policy },
+    matchPolicy: DEFAULT_MATCH_POLICY,
     now: () => new Date(Date.now() + offset),
   }
 

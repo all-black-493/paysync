@@ -5,6 +5,48 @@ Newest milestone first.
 
 ---
 
+## M4: Matching (deterministic) — done 2026-09-28
+
+### Done-when evidence
+
+"The rules test suite passes and the exceptions UI works."
+
+| Check | How | Result |
+|---|---|---|
+| Rules suite | `packages/matching/src/decide.test.ts`: 18 reference normalizations (`INV 0042`, `inv42`, `Invoice #42`, `invoice no. 42`, `0042` → `42`; `REFUND7`, `NOVA5` untouched), every tier and exception branch, injection text, and a fast-check property (2 000 runs): a match never allocates more than is unallocated or still due, picks only an open candidate with the same key, never when an equally written rival exists | pass |
+| Matching job | `apps/worker/src/match.int.test.ts` (real Postgres + graphile-worker): exact, rule, partial then balance, overpayment, duplicate (high), ambiguous → low_confidence, injected reference → no_match, idempotent re-runs, two payments racing for one invoice (one allocation, one duplicate), DB refuses an allocation above the amount due with code bypassed, unverified never matched | pass |
+| API | `apps/api/src/matching.int.test.ts`: suggest (viewer, org-scoped), confirm (split over two expected payments, dry run changes nothing, idempotent replay, exceptions closed, ledger allocation), stale version, over due / over unallocated (`ALLOCATION_REJECTED`, 422 on REST), unverified and closed → `INVALID_STATE`, viewer forbidden; resolve (note required, once, viewer forbidden) | pass |
+| Exceptions UI | Running stack, signed in as the seeded clerk: a verified KES 1,500 payment with reference "rent for oct" → the worker's `match_transaction` raised `no_match`; **Match payment** showed the payment (payer text marked untrusted) and ranked `INV-0042` ("amount equals what is due, due around the payment date") with the amount prefilled; **Allocate** → exception resolved ("Matched by hand."), `INV-0042` paid, one allocation journal, audit `matches.confirm` from `web`, daily totals updated. **Close** dismissed a test-receipt exception with a note. | works |
+| Suite | `make test` 249 passed; lint + dependency check, typecheck, OpenAPI snapshot (reviewed: additions only), verify-images (23), smoke, scan | green |
+
+### What exists
+
+- `@paysync/matching`:
+  - `referenceKey`: upper case, letters and digits only, a run of known prefixes (INVOICE, ACCOUNT, NUMBER, ORDER, ACCT, INV, ACC, REF, ORD, NO) dropped only when digits follow, then leading zeros.
+  - `decide` (§7.1 tiers 1–2): candidates = expected payments with the same key; void never, paid ones only for duplicate detection. Exact = same normalized reference and the amount due; rule = same key, one open candidate within ±120 days of its due date (or exactly one written the same way). Less than due → allocate and raise `partial_payment`; more → allocate the amount due, keep the rest unallocated, raise `overpayment`; several fit → `low_confidence`; a paid one with the same key and amount → `duplicate` (high); else `no_match`. An amount alone never matches. Policy in `DEFAULT_MATCH_POLICY` (partial/over can go to a human instead).
+  - `suggest`: fixed-weight ranking with reasons, for people (and Jev in M6); changes nothing.
+  - `applyMatch`: the only writer of allocations. Locks the transaction, then expected payments in id order; checks verified status, version, amount ≤ unallocated and ≤ still due per expected payment; updates expected statuses (`partially_paid`/`paid`), bumps the transaction version, posts an `allocation` journal (debit `suspense`, credit `applied_receipts`, key `allocation:<matchId>`).
+- Database backstop: deferred constraint trigger `core_allocation_within_due` (allocations of active matches ≤ amount due, also when `amount_due` is lowered), next to M1's per-transaction one.
+- Worker: `markVerified` enqueues `match_transaction` in the same DB transaction; the job runs the pipeline at SERIALIZABLE (withOrg retries serialization failures) and raises exceptions with dedupe keys.
+- API: `matches.suggest` (GET `/v1/transactions/{id}/match-suggestions`), `matches.confirm` (POST `/v1/matches`, split allowed, SERIALIZABLE, closes the transaction's `no_match`/`low_confidence`/`duplicate` exceptions), `exceptions.resolve` (POST `/v1/exceptions/{id}/resolve`, resolved/dismissed with a required note). New error `ALLOCATION_REJECTED` (422). `mutate` gained an isolation option.
+- Permissions: new `exception.resolve` (clerk and up; not viewers, not integrator keys). `match.confirm` as before (clerk and up; never integrator keys).
+- Web: exception rows offer **Match payment** (matching kinds only), **Add/Edit note**, **Close**, per the caller's Permix permissions.
+
+### Decisions
+
+- Candidates are loaded per organization in memory (open, partially paid, and paid in the last 90 days) rather than through a stored key column, so the key rules live in one place (TypeScript). Fine for thousands of open expected payments; revisit with an indexed key if an organization grows past that.
+- Partial payments and overpayments are allocated automatically and flagged, not left unmatched: the reference is unambiguous, and the flag keeps the balance or refund visible. Switch with the policy flags if the owner prefers a human first.
+- The api's `normalizeReference` now comes from `@paysync/matching` (one definition).
+- Ledger: receipts land in `suspense` (unallocated receipts); allocation moves them to `applied_receipts`. Invoices are not posted to receivables, so receivables stay untouched until expected payments are posted as invoices (open question for the owner).
+- `matches.confirm` does not yet escalate by risk (§4.4 "otherwise escalates"): that is the guard's job in M5. Today only verified payments, open expected payments and amounts that fit can be confirmed, by clerk or above.
+
+### Open
+
+- `matches.unmatch` (destructive, approval) and the guard/approval flow are M5.
+- Dev database: the demo payment `UIM4DEMO01` was inserted as verified directly (no receipt journal) to exercise the UI; `make db-reset && make seed` gives a clean ledger.
+
+---
+
 ## M3: Verification + sweeps — done 2026-09-28
 
 ### Done-when evidence

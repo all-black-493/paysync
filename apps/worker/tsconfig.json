@@ -24,6 +24,9 @@
     },
     {
       "path": "../../packages/test-utils"
+    },
+    {
+      "path": "../../packages/matching"
     }
   ]
 }

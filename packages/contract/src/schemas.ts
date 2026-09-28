@@ -142,6 +142,30 @@ export const Match = z
   .strict()
   .meta({ id: 'Match' })
 
+export const SuggestionReason = z.enum([
+  'same_reference',
+  'same_reference_normalized',
+  'similar_reference',
+  'amount_equals_due',
+  'amount_below_due',
+  'due_date_near',
+])
+
+export const MatchSuggestion = z
+  .object({
+    expectedPayment: ExpectedPayment,
+    score: z.number().min(0).max(1),
+    reasons: z.array(SuggestionReason),
+    amount: Money.describe('What confirming this candidate would allocate: the unallocated amount, capped at the amount still due.'),
+  })
+  .strict()
+  .meta({ id: 'MatchSuggestion' })
+
+export const MatchSuggestions = z
+  .object({ transaction: Transaction, suggestions: z.array(MatchSuggestion) })
+  .strict()
+  .meta({ id: 'MatchSuggestions' })
+
 export const DailySummary = z
   .object({
     date: IsoDate,
@@ -161,7 +185,7 @@ export const Permissions = z
   .object({
     transaction: flags('read', 'writeOff'),
     expectedPayment: flags('read', 'create', 'update', 'void'),
-    exception: flags('read', 'annotate'),
+    exception: flags('read', 'annotate', 'resolve'),
     match: flags('read', 'suggest', 'confirm', 'unmatch'),
     report: flags('read'),
     reconciliation: flags('run'),
@@ -212,5 +236,6 @@ export type TransactionOutput = z.output<typeof Transaction>
 export type ExpectedPaymentOutput = z.output<typeof ExpectedPayment>
 export type ExceptionOutput = z.output<typeof ReconException>
 export type MatchOutput = z.output<typeof Match>
+export type MatchSuggestionsOutput = z.output<typeof MatchSuggestions>
 export type DailySummaryOutput = z.output<typeof DailySummary>
 export type ApiKeyOutput = z.output<typeof ApiKey>

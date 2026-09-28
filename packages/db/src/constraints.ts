@@ -4,6 +4,7 @@ export const CONSTRAINTS = {
   receiptPerShortcode: 'mpesa_transaction_shortcodeId_receiptNumber_unique',
   journalBalanced: 'ledger_journal_balanced',
   allocationWithinAmount: 'core_allocation_within_amount',
+  allocationWithinDue: 'core_allocation_within_due',
 } as const
 
 export const SQLSTATE = {

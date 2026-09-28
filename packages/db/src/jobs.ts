@@ -18,6 +18,7 @@ export const JOB_PAYLOADS = {
   check_stk_request: z.object({ orgId: OrgId, stkRequestId: Uuid }),
   pull_transactions: z.object({ orgId: OrgId, shortcodeId: Uuid }),
   request_balance: z.object({ orgId: OrgId, shortcodeId: Uuid }),
+  match_transaction: z.object({ orgId: OrgId, transactionId: Uuid }),
 } as const
 
 export type JobName = keyof typeof JOB_PAYLOADS
@@ -29,6 +30,7 @@ const MAX_ATTEMPTS: Record<JobName, number> = {
   check_stk_request: 5,
   pull_transactions: 5,
   request_balance: 3,
+  match_transaction: 5,
 }
 export type JobPayload<N extends JobName> = z.output<(typeof JOB_PAYLOADS)[N]>
 

@@ -145,7 +145,15 @@ function Dashboard({
         ))}
       </nav>
 
-      {tab === 'exceptions' ? <ExceptionsPanel canWrite={permix.check('exception.annotate')} /> : null}
+      {tab === 'exceptions' ? (
+        <ExceptionsPanel
+          can={{
+            annotate: permix.check('exception.annotate'),
+            resolve: permix.check('exception.resolve'),
+            confirm: permix.check('match.confirm'),
+          }}
+        />
+      ) : null}
       {tab === 'expected' ? <ExpectedPanel canWrite={permix.check('expectedPayment.create')} /> : null}
       {tab === 'transactions' ? <TransactionsPanel /> : null}
       {tab === 'settings' && canSettings ? <SettingsPanel /> : null}

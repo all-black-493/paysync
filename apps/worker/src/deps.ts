@@ -1,5 +1,6 @@
 import type { DarajaClient, DarajaEnvironment, ResultUrls } from '@paysync/daraja'
 import type { Db } from '@paysync/db'
+import type { MatchPolicy } from '@paysync/matching'
 import type { Logger, Sealer } from '@paysync/platform'
 
 export interface VerificationPolicy {
@@ -38,6 +39,7 @@ export interface WorkerDeps {
   /** Null without a public callback URL: requests whose answer comes on a Result URL are not sent. */
   readonly resultUrls: ((kind: 'txn' | 'balance') => ResultUrls) | null
   readonly policy: VerificationPolicy
+  readonly matchPolicy: MatchPolicy
   readonly now: () => Date
 }
 

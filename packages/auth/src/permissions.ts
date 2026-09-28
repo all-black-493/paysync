@@ -4,7 +4,7 @@ import { parseRoles, type RoleName } from './roles.js'
 export type PermissionsDefinition = ValidateDefinition<{
   transaction: ['read', 'writeOff']
   expectedPayment: ['read', 'create', 'update', 'void']
-  exception: ['read', 'annotate']
+  exception: ['read', 'annotate', 'resolve']
   match: ['read', 'suggest', 'confirm', 'unmatch']
   report: ['read']
   reconciliation: ['run']
@@ -18,7 +18,7 @@ type Rules = ReturnType<typeof createRules<PermissionsDefinition>>
 const none = {
   transaction: { read: false, writeOff: false },
   expectedPayment: { read: false, create: false, update: false, void: false },
-  exception: { read: false, annotate: false },
+  exception: { read: false, annotate: false, resolve: false },
   match: { read: false, suggest: false, confirm: false, unmatch: false },
   report: { read: false },
   reconciliation: { run: false },
@@ -31,7 +31,7 @@ const viewer = createRules<PermissionsDefinition>({
   ...none,
   transaction: { read: true, writeOff: false },
   expectedPayment: { read: true, create: false, update: false, void: false },
-  exception: { read: true, annotate: false },
+  exception: { read: true, annotate: false, resolve: false },
   match: { read: true, suggest: true, confirm: false, unmatch: false },
   report: { read: true },
 })
@@ -41,7 +41,7 @@ const clerk = createRules<PermissionsDefinition>({
   ...viewer,
   transaction: { read: true, writeOff: true },
   expectedPayment: { read: true, create: true, update: true, void: true },
-  exception: { read: true, annotate: true },
+  exception: { read: true, annotate: true, resolve: true },
   match: { read: true, suggest: true, confirm: true, unmatch: true },
   reconciliation: { run: true },
 })
@@ -69,7 +69,7 @@ export const INTEGRATOR_RULES = {
     ...viewer,
     match: { read: true, suggest: false, confirm: false, unmatch: false },
     expectedPayment: { read: true, create: true, update: true, void: false },
-    exception: { read: true, annotate: true },
+    exception: { read: true, annotate: true, resolve: false },
   }),
 } as const
 

@@ -7,10 +7,7 @@ type TransactionRow = typeof schema.mpesaTransaction.$inferSelect
 
 export const iso = (d: Date): string => d.toISOString()
 
-/** Case, spaces and punctuation are not significant in references. */
-export function normalizeReference(reference: string): string {
-  return reference.toUpperCase().replace(/[^A-Z0-9]/g, '')
-}
+export { normalizeReference } from '@paysync/matching'
 
 export function toExpectedPayment(row: ExpectedRow, paid: bigint) {
   return {

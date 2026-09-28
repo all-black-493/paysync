@@ -1,0 +1,195 @@
+import { RECEIPT_ACCOUNTS, allocate, ensureAccount, postJournal, schema, type Tx } from '@paysync/db'
+import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm'
+import type { Candidate, PaymentFacts } from './decide.js'
+
+const { allocation, exception, expectedPayment, match, mpesaTransaction } = schema
+
+export class MatchError extends Error {
+  readonly code: 'NOT_FOUND' | 'NOT_VERIFIED' | 'STALE_STATE' | 'EXPECTED_CLOSED' | 'EXCEEDS_DUE' | 'EXCEEDS_AMOUNT'
+  readonly details: Record<string, string>
+
+  constructor(code: MatchError['code'], message: string, details: Record<string, string> = {}) {
+    super(message)
+    this.name = 'MatchError'
+    this.code = code
+    this.details = details
+  }
+}
+
+/** Paid ones stay candidates for a while so a second payment can be flagged as a duplicate. */
+const PAID_LOOKBACK_DAYS = 90
+
+function paidSums(tx: Tx) {
+  return tx
+    .select({ expectedPaymentId: allocation.expectedPaymentId, paid: sql<string | null>`sum(${allocation.amount})::text`.as('paid') })
+    .from(allocation)
+    .innerJoin(match, and(eq(match.id, allocation.matchId), eq(match.status, 'active')))
+    .groupBy(allocation.expectedPaymentId)
+    .as('paid_sums')
+}
+
+export async function loadCandidates(tx: Tx, ids?: readonly string[]): Promise<Candidate[]> {
+  const paid = paidSums(tx)
+  const rows = await tx
+    .select({
+      id: expectedPayment.id,
+      reference: expectedPayment.reference,
+      amountDue: expectedPayment.amountDue,
+      dueDate: expectedPayment.dueDate,
+      status: expectedPayment.status,
+      paid: paid.paid,
+    })
+    .from(expectedPayment)
+    .leftJoin(paid, eq(paid.expectedPaymentId, expectedPayment.id))
+    .where(
+      ids
+        ? inArray(expectedPayment.id, [...ids])
+        : or(
+            inArray(expectedPayment.status, ['open', 'partially_paid']),
+            and(
+              eq(expectedPayment.status, 'paid'),
+              gt(expectedPayment.updatedAt, sql`now() - make_interval(days => ${PAID_LOOKBACK_DAYS})`),
+            ),
+          ),
+    )
+    .orderBy(asc(expectedPayment.id))
+  return rows.map((r) => ({ ...r, paid: BigInt(r.paid ?? '0') }))
+}
+
+export interface TransactionForMatching extends PaymentFacts {
+  readonly id: string
+  readonly receiptNumber: string
+  readonly status: string
+  readonly version: number
+}
+
+/** Locks the transaction row: every allocation for it goes through this lock. */
+export function lockTransaction(tx: Tx, transactionId: string): Promise<TransactionForMatching | null> {
+  return readTransaction(tx, transactionId, true)
+}
+
+export async function readTransaction(tx: Tx, transactionId: string, lock = false): Promise<TransactionForMatching | null> {
+  const query = tx.select().from(mpesaTransaction).where(eq(mpesaTransaction.id, transactionId))
+  const [row] = lock ? await query.for('update') : await query
+  if (!row) return null
+  const [sum] = await tx
+    .select({ total: sql<string>`coalesce(sum(${allocation.amount}), 0)::text` })
+    .from(allocation)
+    .innerJoin(match, and(eq(match.id, allocation.matchId), eq(match.status, 'active')))
+    .where(eq(allocation.transactionId, transactionId))
+  return {
+    id: row.id,
+    receiptNumber: row.receiptNumber,
+    status: row.status,
+    version: row.version,
+    amount: row.amount,
+    allocated: BigInt(sum?.total ?? '0'),
+    reference: row.billRefNumber,
+    transactedAt: row.transactedAt,
+  }
+}
+
+export interface ApplyMatchInput {
+  readonly orgId: string
+  readonly transactionId: string
+  /** When given, the transaction must still be at this version (optimistic concurrency). */
+  readonly expectedVersion?: number
+  readonly method: 'exact' | 'rule' | 'manual'
+  readonly parts: ReadonlyArray<{ readonly expectedPaymentId: string; readonly amount: bigint }>
+  readonly actorUserId?: string | null
+  readonly createdBy: string
+}
+
+/**
+ * The only writer of allocations. Locks the transaction, then the expected
+ * payments in id order (no deadlocks between concurrent matches), re-checks
+ * every amount against what is still due, updates statuses, and moves the
+ * amount from unallocated to applied receipts in the ledger.
+ */
+export async function applyMatch(tx: Tx, input: ApplyMatchInput): Promise<{ matchId: string }> {
+  if (input.parts.length === 0) throw new MatchError('EXCEEDS_AMOUNT', 'a match needs at least one allocation')
+  const payment = await lockTransaction(tx, input.transactionId)
+  if (!payment) throw new MatchError('NOT_FOUND', 'transaction not found')
+  if (input.expectedVersion !== undefined && payment.version !== input.expectedVersion) {
+    throw new MatchError('STALE_STATE', 'the transaction changed', { currentVersion: String(payment.version) })
+  }
+  if (payment.status !== 'verified') {
+    throw new MatchError('NOT_VERIFIED', 'only verified payments can be matched', { status: payment.status })
+  }
+  const total = input.parts.reduce((sum, p) => sum + p.amount, 0n)
+  if (total > payment.amount - payment.allocated) {
+    throw new MatchError('EXCEEDS_AMOUNT', 'the allocations exceed the unallocated amount of the payment', {
+      unallocatedMinor: (payment.amount - payment.allocated).toString(),
+    })
+  }
+
+  const ids = [...new Set(input.parts.map((p) => p.expectedPaymentId))].sort()
+  if (ids.length !== input.parts.length) throw new MatchError('EXCEEDS_DUE', 'each expected payment may appear once')
+  await tx.select({ id: expectedPayment.id }).from(expectedPayment).where(inArray(expectedPayment.id, ids)).orderBy(asc(expectedPayment.id)).for('update')
+  const candidates = new Map((await loadCandidates(tx, ids)).map((c) => [c.id, c]))
+  for (const part of input.parts) {
+    const c = candidates.get(part.expectedPaymentId)
+    if (!c) throw new MatchError('NOT_FOUND', 'expected payment not found', { expectedPaymentId: part.expectedPaymentId })
+    if (c.status !== 'open' && c.status !== 'partially_paid') {
+      throw new MatchError('EXPECTED_CLOSED', 'the expected payment is not open', { expectedPaymentId: c.id, status: c.status })
+    }
+    if (part.amount <= 0n || part.amount > c.amountDue - c.paid) {
+      throw new MatchError('EXCEEDS_DUE', 'the allocation is more than the amount still due', {
+        expectedPaymentId: c.id,
+        dueMinor: (c.amountDue - c.paid).toString(),
+      })
+    }
+  }
+
+  const [created] = await tx
+    .insert(match)
+    .values({ orgId: input.orgId, transactionId: input.transactionId, method: input.method, actorUserId: input.actorUserId ?? null })
+    .returning({ id: match.id })
+  if (!created) throw new Error('match insert returned no row')
+  await allocate(tx, { orgId: input.orgId, transactionId: input.transactionId, matchId: created.id, parts: input.parts })
+
+  for (const part of input.parts) {
+    const c = candidates.get(part.expectedPaymentId)
+    if (!c) continue
+    await tx
+      .update(expectedPayment)
+      .set({ status: c.paid + part.amount === c.amountDue ? 'paid' : 'partially_paid', version: sql`${expectedPayment.version} + 1` })
+      .where(eq(expectedPayment.id, c.id))
+  }
+  await tx
+    .update(mpesaTransaction)
+    .set({ version: payment.version + 1 })
+    .where(eq(mpesaTransaction.id, input.transactionId))
+
+  const suspense = await ensureAccount(tx, input.orgId, RECEIPT_ACCOUNTS.suspense)
+  const applied = await ensureAccount(tx, input.orgId, RECEIPT_ACCOUNTS.applied)
+  await postJournal(tx, {
+    orgId: input.orgId,
+    kind: 'allocation',
+    description: `Allocation of match ${created.id}`,
+    idempotencyKey: `allocation:${created.id}`,
+    transactionId: input.transactionId,
+    createdBy: input.createdBy,
+    lines: [
+      { accountId: suspense, amount: total },
+      { accountId: applied, amount: -total },
+    ],
+  })
+  return { matchId: created.id }
+}
+
+/** Matching exceptions for a transaction that a confirmed match settles. */
+export async function resolveMatchExceptions(tx: Tx, transactionId: string, note: string): Promise<number> {
+  const rows = await tx
+    .update(exception)
+    .set({ status: 'resolved', resolvedAt: sql`now()`, note: sql`coalesce(${exception.note}, ${note})`, version: sql`${exception.version} + 1` })
+    .where(
+      and(
+        eq(exception.transactionId, transactionId),
+        eq(exception.status, 'open'),
+        inArray(exception.kind, ['no_match', 'low_confidence', 'duplicate']),
+      ),
+    )
+    .returning({ id: exception.id })
+  return rows.length
+}

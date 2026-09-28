@@ -23,6 +23,7 @@ import {
   listen,
   loadConfig,
 } from '@paysync/platform'
+import { DEFAULT_MATCH_POLICY } from '@paysync/matching'
 import { run } from 'graphile-worker'
 import { z } from 'zod'
 import { DEFAULT_POLICY, resultUrlsFor, type WorkerDeps } from './deps.js'
@@ -93,6 +94,7 @@ async function main(): Promise<void> {
     }),
     resultUrls: config.CALLBACK_BASE_URL ? resultUrlsFor(config.CALLBACK_BASE_URL, config.CALLBACK_PATH_SECRET) : null,
     policy: DEFAULT_POLICY,
+    matchPolicy: DEFAULT_MATCH_POLICY,
     now: () => new Date(),
   }
   if (!deps.resultUrls) logger.warn('CALLBACK_BASE_URL is not set: Transaction Status and Account Balance requests are disabled')
