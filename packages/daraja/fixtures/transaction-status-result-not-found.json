@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "kind": "transaction_status_result",
+    "provenance": "Captured from the Daraja sandbox via the ngrok tunnel, 2026-09-28",
+    "note": "Transaction Status for a receipt that never existed (an M2 test receipt): numeric ResultCode 2032 and no ResultParameters."
+  },
+  "payload": {
+    "Result": {
+      "ResultCode": 2032,
+      "ResultDesc": "The transaction receipt number does not exist.",
+      "ResultType": 0,
+      "ReferenceData": {
+        "ReferenceItem": {
+          "Key": "Occasion",
+          "Value": "Reconciliation"
+        }
+      },
+      "TransactionID": "UIS1000000",
+      "ConversationID": "AG_20260928_010010540tvw69rpls5n",
+      "OriginatorConversationID": "4327-461f-a3cc-e70d7a42ce475713"
+    }
+  }
+}

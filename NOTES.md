@@ -69,6 +69,14 @@ The owner added a third-party Daraja skill (`.claude/skills/...mpesa-daraja`). W
 - **C2B Register URL was down for 30+ minutes**: v1 and v2, with `example.com` and with the ngrok URL alike → HTTP 500 `500.003.1001` "Service is currently unreachable. Please try again later." A sandbox outage, not an ngrok block. Retry `make daraja ARGS=register-c2b`.
 - The worker sent 3 real Transaction Status requests through the Result URL at 23:50 UTC (accepted, `ResponseCode "0"`), with the placeholder initiator password. **No result or timeout reached the tunnel within 25 minutes.** Either Daraja sends nothing for a rejected credential or sandbox results are slow; re-check with the real test password. The payments stay pending (as designed); the sweep gives up after 12 attempts with an exception.
 
+### First real Transaction Status result (2026-09-28 10:58 UTC)
+
+- The owner set the sandbox initiator password (`secrets/daraja_initiator_password`, name `testapi`). After `compose down` / `make up`, one `verify_transaction` job was queued by hand for the M2 test receipt `RKL51ZDR4F` (its sweeps had run out of attempts).
+- Daraja answered the first two requests with HTTP 500 "Service is temporarily unavailable. Please try again later" (sandbox outage, same morning C2B register still returned "Service is currently unreachable"); graphile's retry sent the third, accepted at 10:56:40.
+- **Result arrived through the tunnel at 10:58:05** (~85 s) on `/hooks/result/txn/…`, was routed by ConversationID, stored with its organization and applied: `ResultCode 2032` "The transaction receipt number does not exist." (numeric code, `ResultType 0`, no `ResultParameters`). The credential was accepted (a wrong one gives 2001). Captured as fixture `transaction-status-result-not-found`.
+- As designed, a non-success code leaves the payment `pending_verification` with no posting. **Owner decision:** should `2032` (receipt unknown to M-Pesa) fail verification outright? It is strong evidence of a forged or mistyped callback, but a receipt may not be queryable immediately after payment [VERIFY on a real payment]; today it ends as the "could not be verified" exception after 12 attempts.
+- Still open: C2B Register URL (sandbox outage) and therefore a real C2B confirmation and a successful Transaction Status result.
+
 ### Still to verify / owner actions
 
 - **Initiator password:** `secrets/daraja_initiator_password` is a random placeholder; put the sandbox app's test initiator password there (Daraja simulator → test credentials).

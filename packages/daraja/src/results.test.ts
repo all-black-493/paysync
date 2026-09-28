@@ -42,6 +42,11 @@ describe('Transaction Status result', () => {
     expect(result).toMatchObject({ succeeded: false, resultCode: '2001', receiptNumber: 'RKL51ZDR4F', amountMinor: null })
   })
 
+  it('normalizes a real sandbox result for an unknown receipt', () => {
+    const result = normalizeTransactionStatusResult(DarajaResult.parse(fixture('transaction-status-result-not-found').payload))
+    expect(result).toMatchObject({ succeeded: false, resultCode: '2032', receiptNumber: null, amountMinor: null, transactionStatus: null })
+  })
+
   it('parses the synchronous acknowledgement', () => {
     expect(AsyncRequestResponse.parse(fixture('transaction-status-accepted').payload).ConversationID).toBe('AG_20210709_1234409f86436c583e3f')
   })
