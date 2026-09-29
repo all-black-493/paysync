@@ -199,6 +199,18 @@
             ],
             "additionalProperties": false
           },
+          "pendingAction": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "read"
+            ],
+            "additionalProperties": false
+          },
           "reconciliation": {
             "type": "object",
             "properties": {
@@ -262,6 +274,7 @@
           "exception",
           "match",
           "report",
+          "pendingAction",
           "reconciliation",
           "approval",
           "reversal",
@@ -402,6 +415,10 @@
           "allocated": {
             "$ref": "#/components/schemas/Money"
           },
+          "writtenOff": {
+            "description": "Unallocated remainder written off with approval (transactions.writeOffVariance).",
+            "$ref": "#/components/schemas/Money"
+          },
           "unallocated": {
             "$ref": "#/components/schemas/Money"
           },
@@ -422,6 +439,7 @@
           "billRefNumber",
           "shortcode",
           "allocated",
+          "writtenOff",
           "unallocated",
           "version"
         ],
@@ -445,6 +463,282 @@
         ],
         "additionalProperties": false,
         "description": "Amount in minor units (1 KES = 100) as an integer string."
+      },
+      "IdempotencyConflict": {
+        "title": "IDEMPOTENCY_CONFLICT",
+        "type": "object",
+        "properties": {
+          "defined": {
+            "const": true
+          },
+          "code": {
+            "const": "IDEMPOTENCY_CONFLICT"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        },
+        "required": [
+          "defined",
+          "code",
+          "message"
+        ]
+      },
+      "StaleState": {
+        "title": "STALE_STATE",
+        "type": "object",
+        "properties": {
+          "defined": {
+            "const": true
+          },
+          "code": {
+            "const": "STALE_STATE"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "currentVersion": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "currentVersion"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+          "data"
+        ]
+      },
+      "InvalidState": {
+        "title": "INVALID_STATE",
+        "type": "object",
+        "properties": {
+          "defined": {
+            "const": true
+          },
+          "code": {
+            "const": "INVALID_STATE"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+          "data"
+        ]
+      },
+      "RateLimited": {
+        "title": "RATE_LIMITED",
+        "type": "object",
+        "properties": {
+          "defined": {
+            "const": true
+          },
+          "code": {
+            "const": "RATE_LIMITED"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        },
+        "required": [
+          "defined",
+          "code",
+          "message"
+        ]
+      },
+      "ApprovalRequired": {
+        "title": "APPROVAL_REQUIRED",
+        "type": "object",
+        "properties": {
+          "defined": {
+            "const": true
+          },
+          "code": {
+            "const": "APPROVAL_REQUIRED"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "pendingActionId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "approvalsRequired": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "preview": {}
+            },
+            "required": [
+              "pendingActionId",
+              "summary",
+              "approvalsRequired",
+              "reasons",
+              "preview"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+          "data"
+        ]
+      },
+      "Blocked": {
+        "title": "BLOCKED",
+        "type": "object",
+        "properties": {
+          "defined": {
+            "const": true
+          },
+          "code": {
+            "const": "BLOCKED"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+          "data"
+        ]
+      },
+      "BudgetExceeded": {
+        "title": "BUDGET_EXCEEDED",
+        "type": "object",
+        "properties": {
+          "defined": {
+            "const": true
+          },
+          "code": {
+            "const": "BUDGET_EXCEEDED"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "budget": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "string"
+              },
+              "used": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "budget",
+              "limit",
+              "used"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+          "data"
+        ]
+      },
+      "AllocationRejected": {
+        "title": "ALLOCATION_REJECTED",
+        "type": "object",
+        "properties": {
+          "defined": {
+            "const": true
+          },
+          "code": {
+            "const": "ALLOCATION_REJECTED"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "expectedPaymentId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "unallocated": {
+                "type": "string"
+              },
+              "due": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "defined",
+          "code",
+          "message",
+          "data"
+        ]
       },
       "ExpectedPayment": {
         "type": "object",
@@ -527,27 +821,6 @@
         ],
         "additionalProperties": false
       },
-      "IdempotencyConflict": {
-        "title": "IDEMPOTENCY_CONFLICT",
-        "type": "object",
-        "properties": {
-          "defined": {
-            "const": true
-          },
-          "code": {
-            "const": "IDEMPOTENCY_CONFLICT"
-          },
-          "message": {
-            "type": "string"
-          },
-          "data": {}
-        },
-        "required": [
-          "defined",
-          "code",
-          "message"
-        ]
-      },
       "DuplicateReference": {
         "title": "DUPLICATE_REFERENCE",
         "type": "object",
@@ -583,74 +856,6 @@
           "data"
         ]
       },
-      "StaleState": {
-        "title": "STALE_STATE",
-        "type": "object",
-        "properties": {
-          "defined": {
-            "const": true
-          },
-          "code": {
-            "const": "STALE_STATE"
-          },
-          "message": {
-            "type": "string"
-          },
-          "data": {
-            "type": "object",
-            "properties": {
-              "currentVersion": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              }
-            },
-            "required": [
-              "currentVersion"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "required": [
-          "defined",
-          "code",
-          "message",
-          "data"
-        ]
-      },
-      "InvalidState": {
-        "title": "INVALID_STATE",
-        "type": "object",
-        "properties": {
-          "defined": {
-            "const": true
-          },
-          "code": {
-            "const": "INVALID_STATE"
-          },
-          "message": {
-            "type": "string"
-          },
-          "data": {
-            "type": "object",
-            "properties": {
-              "status": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "status"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "required": [
-          "defined",
-          "code",
-          "message",
-          "data"
-        ]
-      },
       "Exception": {
         "type": "object",
         "properties": {
@@ -671,7 +876,8 @@
               "amount_mismatch",
               "balance_variance",
               "job_failed",
-              "missing_callback"
+              "missing_callback",
+              "reversal_failed"
             ]
           },
           "status": {
@@ -899,15 +1105,223 @@
         ],
         "additionalProperties": false
       },
-      "AllocationRejected": {
-        "title": "ALLOCATION_REJECTED",
+      "ReversalRequest": {
+        "type": "object",
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "receiptNumber": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "transactionId",
+          "receiptNumber",
+          "amount",
+          "status",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "PendingAction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "procedure": {
+            "type": "string"
+          },
+          "risk": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "destructive"
+            ]
+          },
+          "money": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "input": {
+            "description": "The request exactly as it will run on approval."
+          },
+          "preview": {
+            "description": "What the action would change, from a dry run at request time."
+          },
+          "requestedBy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "surface": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "rejected",
+              "executed",
+              "failed",
+              "expired"
+            ]
+          },
+          "approvalsRequired": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2
+          },
+          "approvals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "approverId": {
+                  "type": "string"
+                },
+                "approverName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "decision": {
+                  "type": "string",
+                  "enum": [
+                    "approve",
+                    "reject"
+                  ]
+                },
+                "note": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              },
+              "required": [
+                "approverId",
+                "approverName",
+                "decision",
+                "note",
+                "at"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "result": {},
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "decidedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "procedure",
+          "risk",
+          "money",
+          "summary",
+          "reasons",
+          "input",
+          "preview",
+          "requestedBy",
+          "surface",
+          "status",
+          "approvalsRequired",
+          "approvals",
+          "result",
+          "error",
+          "createdAt",
+          "expiresAt",
+          "decidedAt",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "StepUpRequired": {
+        "title": "STEP_UP_REQUIRED",
         "type": "object",
         "properties": {
           "defined": {
             "const": true
           },
           "code": {
-            "const": "ALLOCATION_REJECTED"
+            "const": "STEP_UP_REQUIRED"
           },
           "message": {
             "type": "string"
@@ -915,18 +1329,17 @@
           "data": {
             "type": "object",
             "properties": {
-              "expectedPaymentId": {
+              "reason": {
                 "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              "unallocated": {
-                "type": "string"
-              },
-              "due": {
-                "type": "string"
+                "enum": [
+                  "two_factor_required",
+                  "session_too_old"
+                ]
               }
             },
+            "required": [
+              "reason"
+            ],
             "additionalProperties": false
           }
         },
@@ -1350,6 +1763,212 @@
         }
       }
     },
+    "/v1/transactions/{transactionId}/write-offs": {
+      "post": {
+        "operationId": "transactions.writeOffVariance",
+        "summary": "Write off an unallocated remainder",
+        "description": "Requests that part of a verified payment that will never be allocated (for example a small overpayment) be written off, so it stops showing as unallocated. Always waits for a person to approve it (APPROVAL_REQUIRED with a pendingActionId); amounts above the configured cap are refused outright. Use dryRun to preview. Does not refund anyone: use reversals.request to return money.",
+        "tags": [
+          "transactions"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "transactionId",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "amount": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500,
+                    "description": "Why, for the approver and the audit log."
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "description": "Unique per logical action. Retrying with the same key returns the original result."
+                  },
+                  "dryRun": {
+                    "default": false,
+                    "description": "Validate and preview the change without writing it.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "version",
+                  "amount",
+                  "reason",
+                  "idempotencyKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "$ref": "#/components/schemas/Transaction"
+                    }
+                  },
+                  "required": [
+                    "dryRun",
+                    "changed",
+                    "result"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This action is not allowed., This action would exceed the organization’s budget for it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Blocked"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BudgetExceeded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This idempotency key was already used for a different request., The record changed since you read it. Re-read it and retry with the current version., The record is not in a state that allows this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IdempotencyConflict"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StaleState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The allocation does not fit: it exceeds the unallocated amount of the payment or the amount still due.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AllocationRejected"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "This action waits for a person to approve it in the web app. Nothing has changed yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApprovalRequired"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/expected-payments": {
       "get": {
         "operationId": "expected.list",
@@ -1553,6 +2172,26 @@
               }
             }
           },
+          "403": {
+            "description": "This action is not allowed., This action would exceed the organization’s budget for it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Blocked"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BudgetExceeded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not found",
             "content": {
@@ -1581,6 +2220,40 @@
                     },
                     {
                       "$ref": "#/components/schemas/DuplicateReference"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "This action waits for a person to approve it in the web app. Nothing has changed yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApprovalRequired"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
                     },
                     {
                       "$ref": "#/components/schemas/UndefinedError"
@@ -1766,6 +2439,26 @@
               }
             }
           },
+          "403": {
+            "description": "This action is not allowed., This action would exceed the organization’s budget for it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Blocked"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BudgetExceeded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not found",
             "content": {
@@ -1800,6 +2493,225 @@
                     },
                     {
                       "$ref": "#/components/schemas/InvalidState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "This action waits for a person to approve it in the web app. Nothing has changed yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApprovalRequired"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expected-payments/{id}/void": {
+      "post": {
+        "operationId": "expected.void",
+        "summary": "Void an expected payment",
+        "description": "Requests that an expected payment nobody will pay be cancelled, reversing its invoice in the ledger. Only possible while nothing is allocated to it (unmatch first). Always waits for a person to approve it (APPROVAL_REQUIRED with a pendingActionId). Pass the version you read.",
+        "tags": [
+          "expected-payments"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500,
+                    "description": "Why, for the approver and the audit log."
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "description": "Unique per logical action. Retrying with the same key returns the original result."
+                  },
+                  "dryRun": {
+                    "default": false,
+                    "description": "Validate and preview the change without writing it.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "version",
+                  "reason",
+                  "idempotencyKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "$ref": "#/components/schemas/ExpectedPayment"
+                    }
+                  },
+                  "required": [
+                    "dryRun",
+                    "changed",
+                    "result"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This action is not allowed., This action would exceed the organization’s budget for it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Blocked"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BudgetExceeded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This idempotency key was already used for a different request., The record changed since you read it. Re-read it and retry with the current version., The record is not in a state that allows this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IdempotencyConflict"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StaleState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "This action waits for a person to approve it in the web app. Nothing has changed yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApprovalRequired"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
                     },
                     {
                       "$ref": "#/components/schemas/UndefinedError"
@@ -1851,7 +2763,8 @@
                 "amount_mismatch",
                 "balance_variance",
                 "job_failed",
-                "missing_callback"
+                "missing_callback",
+                "reversal_failed"
               ]
             },
             "allowEmptyValue": true,
@@ -2127,6 +3040,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -2226,6 +3156,26 @@
               }
             }
           },
+          "403": {
+            "description": "This action is not allowed., This action would exceed the organization’s budget for it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Blocked"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BudgetExceeded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not found",
             "content": {
@@ -2257,6 +3207,40 @@
                     },
                     {
                       "$ref": "#/components/schemas/InvalidState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "This action waits for a person to approve it in the web app. Nothing has changed yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApprovalRequired"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
                     },
                     {
                       "$ref": "#/components/schemas/UndefinedError"
@@ -2492,6 +3476,26 @@
               }
             }
           },
+          "403": {
+            "description": "This action is not allowed., This action would exceed the organization’s budget for it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Blocked"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BudgetExceeded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not found",
             "content": {
@@ -2548,6 +3552,40 @@
                 }
               }
             }
+          },
+          "428": {
+            "description": "This action waits for a person to approve it in the web app. Nothing has changed yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApprovalRequired"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -2591,6 +3629,673 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/matches/{id}/unmatch": {
+      "post": {
+        "operationId": "matches.unmatch",
+        "summary": "Undo a match",
+        "description": "Requests that a match be undone: its allocations stop counting, the expected payments reopen and the ledger entry is reversed; the payment becomes unallocated again. Always waits for a person to approve it (APPROVAL_REQUIRED with a pendingActionId). Use dryRun to preview.",
+        "tags": [
+          "matches"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500,
+                    "description": "Why, for the approver and the audit log."
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "description": "Unique per logical action. Retrying with the same key returns the original result."
+                  },
+                  "dryRun": {
+                    "default": false,
+                    "description": "Validate and preview the change without writing it.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "reason",
+                  "idempotencyKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "$ref": "#/components/schemas/Match"
+                    }
+                  },
+                  "required": [
+                    "dryRun",
+                    "changed",
+                    "result"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This action is not allowed., This action would exceed the organization’s budget for it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Blocked"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BudgetExceeded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This idempotency key was already used for a different request., The record is not in a state that allows this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IdempotencyConflict"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "This action waits for a person to approve it in the web app. Nothing has changed yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApprovalRequired"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/transactions/{transactionId}/reversal": {
+      "post": {
+        "operationId": "reversals.request",
+        "summary": "Request an M-Pesa reversal",
+        "description": "Requests that a verified, unallocated payment be reversed back to the payer through M-Pesa. Moves money: it always needs two different approvers in the web app and is never executed automatically. Unmatch first if the payment is allocated. The reversal runs only after approval, and the payment shows as reversed only when Safaricom confirms it.",
+        "tags": [
+          "reversals"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "transactionId",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500,
+                    "description": "Why, for the approver and the audit log."
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "description": "Unique per logical action. Retrying with the same key returns the original result."
+                  },
+                  "dryRun": {
+                    "default": false,
+                    "description": "Validate and preview the change without writing it.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "version",
+                  "reason",
+                  "idempotencyKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dryRun": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "$ref": "#/components/schemas/ReversalRequest"
+                    }
+                  },
+                  "required": [
+                    "dryRun",
+                    "changed",
+                    "result"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This action is not allowed., This action would exceed the organization’s budget for it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Blocked"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BudgetExceeded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This idempotency key was already used for a different request., The record changed since you read it. Re-read it and retry with the current version., The record is not in a state that allows this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IdempotencyConflict"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StaleState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "This action waits for a person to approve it in the web app. Nothing has changed yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApprovalRequired"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pending-actions": {
+      "get": {
+        "operationId": "pendingActions.list",
+        "summary": "List actions waiting for approval",
+        "description": "Lists guarded actions and their approval state, newest first; defaults to those still pending. Only people approve them, in the web app; there is no way to approve through the API or as an agent.",
+        "tags": [
+          "approvals"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "default": "pending",
+              "type": "string",
+              "enum": [
+                "pending",
+                "rejected",
+                "executed",
+                "failed",
+                "expired"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "Opaque cursor from a previous page (`nextCursor`)."
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PendingAction"
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pending-actions/{id}": {
+      "get": {
+        "operationId": "pendingActions.get",
+        "summary": "Get one action waiting for approval",
+        "description": "Returns a guarded action with its approvals and, once executed, its result. Use it to follow up on an APPROVAL_REQUIRED answer.",
+        "tags": [
+          "approvals"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingAction"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pending-actions/{id}/decide": {
+      "post": {
+        "operationId": "approvals.decide",
+        "summary": "Approve or reject an action",
+        "description": "Web app only, for people with an approver role and two-factor authentication who signed in recently. The requester can never decide on their own request; money actions need two different approvers. When the last approval arrives the action runs once; if what it changes moved meanwhile, it fails with STALE_STATE and must be requested again.",
+        "tags": [
+          "approvals"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approve",
+                      "reject"
+                    ]
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "description": "Unique per logical action. Retrying with the same key returns the original result."
+                  }
+                },
+                "required": [
+                  "version",
+                  "decision",
+                  "idempotencyKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingAction"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Approving needs two-factor authentication and a recent sign-in. Sign in again, then retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/StepUpRequired"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This idempotency key was already used for a different request., The record changed since you read it. Re-read it and retry with the current version., The record is not in a state that allows this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IdempotencyConflict"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StaleState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
                     },
                     {
                       "$ref": "#/components/schemas/UndefinedError"
@@ -2786,6 +4491,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -2893,6 +4615,23 @@
                     },
                     {
                       "$ref": "#/components/schemas/InvalidState"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
                     },
                     {
                       "$ref": "#/components/schemas/UndefinedError"

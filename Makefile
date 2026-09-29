@@ -176,6 +176,10 @@ lock: ## Refresh pnpm-lock.yaml inside a container (after editing package.json)
 	  -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 -v "$$PWD":/repo -w /repo $(NODE_IMAGE) \
 	  sh -c 'corepack pnpm install --lockfile-only'
 
+.PHONY: replay
+replay: bootstrap ## Audit trail, oldest first: make replay ARGS="--org acme-rentals --user clerk@acme.test --since 60"
+	$(COMPOSE) run --rm --no-deps api node dist/audit-cli.js replay $(ARGS)
+
 .PHONY: simulate
 simulate: bootstrap ## Replay every Daraja callback fixture (duplicated, shuffled) against the running api
 	$(COMPOSE) --profile tools run --rm daraja replay

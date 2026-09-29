@@ -2,10 +2,10 @@ import { RECEIPT_ACCOUNTS, allocate, ensureAccount, postJournal, schema, type Tx
 import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm'
 import type { Candidate, PaymentFacts } from './decide.js'
 
-const { allocation, exception, expectedPayment, match, mpesaTransaction } = schema
+const { allocation, exception, expectedPayment, match, mpesaTransaction, varianceWriteOff } = schema
 
 export class MatchError extends Error {
-  readonly code: 'NOT_FOUND' | 'NOT_VERIFIED' | 'STALE_STATE' | 'EXPECTED_CLOSED' | 'EXCEEDS_DUE' | 'EXCEEDS_AMOUNT'
+  readonly code: 'NOT_FOUND' | 'NOT_VERIFIED' | 'STALE_STATE' | 'EXPECTED_CLOSED' | 'EXCEEDS_DUE' | 'EXCEEDS_AMOUNT' | 'ALREADY_UNMATCHED'
   readonly details: Record<string, string>
 
   constructor(code: MatchError['code'], message: string, details: Record<string, string> = {}) {
@@ -61,6 +61,9 @@ export interface TransactionForMatching extends PaymentFacts {
   readonly receiptNumber: string
   readonly status: string
   readonly version: number
+  /** Active allocations only (`allocated` also counts write-offs). */
+  readonly allocations: bigint
+  readonly writtenOff: bigint
 }
 
 /** Locks the transaction row: every allocation for it goes through this lock. */
@@ -77,13 +80,22 @@ export async function readTransaction(tx: Tx, transactionId: string, lock = fals
     .from(allocation)
     .innerJoin(match, and(eq(match.id, allocation.matchId), eq(match.status, 'active')))
     .where(eq(allocation.transactionId, transactionId))
+  const [off] = await tx
+    .select({ total: sql<string>`coalesce(sum(${varianceWriteOff.amount}), 0)::text` })
+    .from(varianceWriteOff)
+    .where(eq(varianceWriteOff.transactionId, transactionId))
+  const allocations = BigInt(sum?.total ?? '0')
+  const writtenOff = BigInt(off?.total ?? '0')
   return {
     id: row.id,
     receiptNumber: row.receiptNumber,
     status: row.status,
     version: row.version,
     amount: row.amount,
-    allocated: BigInt(sum?.total ?? '0'),
+    // Written-off money is no longer available to allocate either.
+    allocated: allocations + writtenOff,
+    allocations,
+    writtenOff,
     reference: row.billRefNumber,
     transactedAt: row.transactedAt,
   }
@@ -177,6 +189,61 @@ export async function applyMatch(tx: Tx, input: ApplyMatchInput): Promise<{ matc
     ],
   })
   return { matchId: created.id }
+}
+
+/**
+ * Reverses a match: its allocations stop counting, expected payments reopen,
+ * the ledger entry is reversed. Same lock order as applyMatch. Unmatching is
+ * final (a database trigger refuses reactivation).
+ */
+export async function undoMatch(tx: Tx, input: { orgId: string; matchId: string; createdBy: string }): Promise<{ transactionId: string }> {
+  const [found] = await tx.select().from(match).where(eq(match.id, input.matchId))
+  if (!found) throw new MatchError('NOT_FOUND', 'match not found')
+  const payment = await lockTransaction(tx, found.transactionId)
+  if (!payment) throw new MatchError('NOT_FOUND', 'transaction not found')
+  const [locked] = await tx.select().from(match).where(eq(match.id, input.matchId)).for('update')
+  if (locked?.status !== 'active') throw new MatchError('ALREADY_UNMATCHED', 'the match is already undone', { status: locked?.status ?? 'unknown' })
+
+  const parts = await tx.select().from(allocation).where(eq(allocation.matchId, locked.id))
+  const ids = [...new Set(parts.map((p) => p.expectedPaymentId))].sort()
+  if (ids.length > 0) {
+    await tx.select({ id: expectedPayment.id }).from(expectedPayment).where(inArray(expectedPayment.id, ids)).orderBy(asc(expectedPayment.id)).for('update')
+  }
+  await tx
+    .update(match)
+    .set({ status: 'unmatched', unmatchedAt: sql`now()`, version: locked.version + 1 })
+    .where(eq(match.id, locked.id))
+
+  // Paid totals after the match stopped counting.
+  const candidates = new Map((ids.length === 0 ? [] : await loadCandidates(tx, ids)).map((c) => [c.id, c]))
+  for (const id of ids) {
+    const c = candidates.get(id)
+    if (!c || c.status === 'void') continue
+    const status = c.paid === 0n ? 'open' : c.paid >= c.amountDue ? 'paid' : 'partially_paid'
+    if (status !== c.status) {
+      await tx.update(expectedPayment).set({ status, version: sql`${expectedPayment.version} + 1` }).where(eq(expectedPayment.id, id))
+    }
+  }
+  await tx.update(mpesaTransaction).set({ version: payment.version + 1 }).where(eq(mpesaTransaction.id, payment.id))
+
+  const total = parts.reduce((sum, p) => sum + p.amount, 0n)
+  if (total > 0n) {
+    const suspense = await ensureAccount(tx, input.orgId, RECEIPT_ACCOUNTS.suspense)
+    const receivables = await ensureAccount(tx, input.orgId, RECEIPT_ACCOUNTS.receivables)
+    await postJournal(tx, {
+      orgId: input.orgId,
+      kind: 'unallocation',
+      description: `Match ${locked.id} undone`,
+      idempotencyKey: `unallocation:${locked.id}`,
+      transactionId: payment.id,
+      createdBy: input.createdBy,
+      lines: [
+        { accountId: receivables, amount: total },
+        { accountId: suspense, amount: -total },
+      ],
+    })
+  }
+  return { transactionId: payment.id }
 }
 
 /** Matching exceptions for a transaction that a confirmed match settles. */

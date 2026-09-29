@@ -38,6 +38,7 @@ export const EXCEPTION_KINDS = [
   'balance_variance',
   'job_failed',
   'missing_callback',
+  'reversal_failed',
 ] as const
 export const EXCEPTION_STATUSES = ['open', 'resolved', 'dismissed'] as const
 export const EXCEPTION_PRIORITIES = ['normal', 'high'] as const
@@ -256,5 +257,28 @@ export const balanceSnapshot = core.table(
     index().on(t.orgId, t.shortcodeId, t.reportedAt),
     sameOrg('balance_snapshot_shortcode_fk', { column: t.shortcodeId, orgId: t.orgId }, shortcode),
     check('balance_snapshot_currency', sql`${t.currency} = 'KES'`),
+  ],
+)
+
+/** Unallocated remainder written off (e.g. a small overpayment). Append-only; counts against the payment's amount. */
+export const varianceWriteOff = core.table(
+  'variance_write_off',
+  {
+    id: id(),
+    orgId: orgId(),
+    transactionId: uuid().notNull(),
+    amount: money(),
+    currency: currency(),
+    reason: text().notNull(),
+    pendingActionId: uuid(),
+    createdBy: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index().on(t.orgId, t.transactionId),
+    sameOrg('variance_write_off_transaction_fk', { column: t.transactionId, orgId: t.orgId }, mpesaTransaction),
+    check('variance_write_off_amount_positive', sql`${t.amount} > 0`),
+    check('variance_write_off_currency', sql`${t.currency} = 'KES'`),
+    check('variance_write_off_reason_length', sql`char_length(${t.reason}) BETWEEN 1 AND 500`),
   ],
 )

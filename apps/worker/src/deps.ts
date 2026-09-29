@@ -37,15 +37,17 @@ export interface WorkerDeps {
   readonly environment: DarajaEnvironment
   readonly daraja: DarajaClient
   /** Null without a public callback URL: requests whose answer comes on a Result URL are not sent. */
-  readonly resultUrls: ((kind: 'txn' | 'balance') => ResultUrls) | null
+  readonly resultUrls: ((kind: ResultUrlKind) => ResultUrls) | null
   readonly policy: VerificationPolicy
   readonly matchPolicy: MatchPolicy
   readonly now: () => Date
 }
 
+export type ResultUrlKind = 'txn' | 'balance' | 'reversal'
+
 export function resultUrlsFor(baseUrl: string, secret: string) {
   const base = baseUrl.replace(/\/$/, '')
-  return (kind: 'txn' | 'balance'): ResultUrls => ({
+  return (kind: ResultUrlKind): ResultUrls => ({
     resultUrl: `${base}/hooks/result/${kind}/${secret}`,
     timeoutUrl: `${base}/hooks/timeout/${kind}/${secret}`,
   })

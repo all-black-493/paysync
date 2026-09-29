@@ -1,8 +1,8 @@
 import { enqueueJob, schema, withOrg, type Db, type Tx } from '@paysync/db'
-import { and, eq, gt, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm'
+import { and, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm'
 import type { WorkerDeps } from './deps.js'
 
-const { mpesaTransaction, organization, shortcode, stkRequest } = schema
+const { mpesaTransaction, organization, pendingAction, shortcode, stkRequest } = schema
 
 const BATCH = 500
 
@@ -90,3 +90,17 @@ export const sweepPull = (deps: WorkerDeps) => sweepShortcodes(deps, shortcode.p
 
 /** End-of-day Account Balance for every shortcode our initiator may query. */
 export const sweepBalances = (deps: WorkerDeps) => sweepShortcodes(deps, shortcode.initiatorEnabled, 'request_balance')
+
+/** Approval requests nobody decided in time expire (they are also expired whenever the queue is read). */
+export async function sweepPendingActions(deps: WorkerDeps): Promise<number> {
+  const expired = await forEachOrg(deps.db, async (tx) => {
+    const rows = await tx
+      .update(pendingAction)
+      .set({ status: 'expired', decidedAt: sql`now()`, version: sql`${pendingAction.version} + 1` })
+      .where(and(eq(pendingAction.status, 'pending'), lt(pendingAction.expiresAt, sql`now()`)))
+      .returning({ id: pendingAction.id })
+    return rows.length
+  })
+  deps.logger.info({ expired }, 'pending action sweep')
+  return expired
+}

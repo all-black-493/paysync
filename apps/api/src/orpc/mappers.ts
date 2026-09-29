@@ -46,6 +46,7 @@ export function toTransaction(
   row: TransactionRow,
   shortcode: { id: string; code: string; kind: 'paybill' | 'till' },
   allocated: bigint,
+  writtenOff = 0n,
 ) {
   return {
     id: row.id,
@@ -58,7 +59,8 @@ export function toTransaction(
     billRefNumber: row.billRefNumber,
     shortcode,
     allocated: toMoney(allocated),
-    unallocated: toMoney(row.amount - allocated),
+    writtenOff: toMoney(writtenOff),
+    unallocated: toMoney(row.amount - allocated - writtenOff),
     version: row.version,
   }
 }

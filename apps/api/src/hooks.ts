@@ -11,7 +11,7 @@ import {
 } from '@paysync/ingest'
 
 const MAX_BODY_BYTES = 64 * 1024
-const ROUTE = /^\/hooks\/(c2b\/validation|c2b\/confirmation|stk|result\/txn|result\/balance|timeout\/txn|timeout\/balance)\/([^/]+)$/
+const ROUTE = /^\/hooks\/(c2b\/validation|c2b\/confirmation|stk|result\/txn|result\/balance|result\/reversal|timeout\/txn|timeout\/balance|timeout\/reversal)\/([^/]+)$/
 
 export interface HookOptions extends IngestDeps {
   readonly callbackSecret: string
@@ -55,7 +55,16 @@ function clientIp(req: IncomingMessage): string {
 const ACCEPTED_C2B = { ResultCode: '0', ResultDesc: 'Accepted' }
 const ACCEPTED_STK = { ResultCode: 0, ResultDesc: 'Accepted' }
 
-type Kind = 'c2b/validation' | 'c2b/confirmation' | 'stk' | 'result/txn' | 'result/balance' | 'timeout/txn' | 'timeout/balance'
+type Kind =
+  | 'c2b/validation'
+  | 'c2b/confirmation'
+  | 'stk'
+  | 'result/txn'
+  | 'result/balance'
+  | 'result/reversal'
+  | 'timeout/txn'
+  | 'timeout/balance'
+  | 'timeout/reversal'
 
 const SOURCES: Record<Kind, Source> = {
   'c2b/validation': 'c2b_validation',
@@ -63,8 +72,10 @@ const SOURCES: Record<Kind, Source> = {
   stk: 'stk_callback',
   'result/txn': 'transaction_status_result',
   'result/balance': 'account_balance_result',
+  'result/reversal': 'reversal_result',
   'timeout/txn': 'queue_timeout',
   'timeout/balance': 'queue_timeout',
+  'timeout/reversal': 'queue_timeout',
 }
 
 function ingest(options: HookOptions, kind: Kind, body: unknown): Promise<IngestResult> {
@@ -83,6 +94,10 @@ function ingest(options: HookOptions, kind: Kind, body: unknown): Promise<Ingest
       return ingestDarajaResult(options, 'timeout', 'transaction_status', body)
     case 'timeout/balance':
       return ingestDarajaResult(options, 'timeout', 'account_balance', body)
+    case 'result/reversal':
+      return ingestDarajaResult(options, 'result', 'reversal', body)
+    case 'timeout/reversal':
+      return ingestDarajaResult(options, 'timeout', 'reversal', body)
   }
 }
 

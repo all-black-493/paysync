@@ -5,9 +5,10 @@ import { requestBalance } from './balance.js'
 import type { WorkerDeps } from './deps.js'
 import { matchTransaction } from './match.js'
 import { pullTransactions } from './pull.js'
-import { applyDarajaResult } from './results.js'
+import { applyDarajaResult } from './results/index.js'
+import { executeReversal } from './reversal.js'
 import { checkStkRequest } from './stk.js'
-import { sweepBalances, sweepPull, sweepStkRequests, sweepUnverified } from './sweeps.js'
+import { sweepBalances, sweepPendingActions, sweepPull, sweepStkRequests, sweepUnverified } from './sweeps.js'
 import { verifyTransaction } from './verify.js'
 
 function job<S extends z.ZodType>(deps: WorkerDeps, schema: S, run: (deps: WorkerDeps, payload: z.output<S>) => Promise<unknown>): Task {
@@ -30,10 +31,12 @@ export function taskList(deps: WorkerDeps): TaskList {
     pull_transactions: job(deps, JOB_PAYLOADS.pull_transactions, pullTransactions),
     request_balance: job(deps, JOB_PAYLOADS.request_balance, requestBalance),
     match_transaction: job(deps, JOB_PAYLOADS.match_transaction, matchTransaction),
+    execute_reversal: job(deps, JOB_PAYLOADS.execute_reversal, executeReversal),
     sweep_unverified: cron(deps, sweepUnverified),
     sweep_stk_requests: cron(deps, sweepStkRequests),
     sweep_pull: cron(deps, sweepPull),
     sweep_balances: cron(deps, sweepBalances),
+    sweep_pending_actions: cron(deps, sweepPendingActions),
   }
 }
 
@@ -43,6 +46,7 @@ export const CRONTAB = `
 */10 * * * * sweep_stk_requests ?id=sweep_stk_requests&fill=30m&max=3
 7 * * * * sweep_pull ?id=sweep_pull&fill=2h&max=3
 0 15 * * * sweep_balances ?id=sweep_balances&fill=6h&max=3
+17 * * * * sweep_pending_actions ?id=sweep_pending_actions&fill=2h&max=3
 `
 
 const WithOrg = z.object({ orgId: z.string().min(1) })

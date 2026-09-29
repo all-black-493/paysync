@@ -34,12 +34,12 @@ function canonical(value: unknown): unknown {
   return value
 }
 
-function requestHash(request: Record<string, unknown>): string {
+export function requestHash(request: Record<string, unknown>): string {
   const significant = Object.fromEntries(Object.entries(request).filter(([k]) => k !== 'idempotencyKey' && k !== 'dryRun'))
   return createHash('sha256').update(JSON.stringify(canonical(significant))).digest('hex')
 }
 
-function redact(request: Record<string, unknown>): Record<string, unknown> {
+export function redact(request: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(request).map(([k, v]) => [k, REDACTED_INPUT_FIELDS.has(k) ? '[redacted]' : v]))
 }
 
@@ -56,6 +56,9 @@ export interface MutationOptions<T> {
   readonly stored?: (preview: Preview<T>) => Preview<T>
   /** Serializable for allocation paths; retried on serialization failures. */
   readonly isolation?: 'read committed' | 'serializable'
+  /** The guard's decision and reasons, for the audit log. */
+  readonly decision?: string
+  readonly reasons?: readonly string[]
 }
 
 /**
@@ -105,7 +108,9 @@ export async function mutate<T>(options: MutationOptions<T>): Promise<Preview<T>
         userId: caller.actorId,
         action: options.action,
         input: redact(input),
+        decision: options.decision ?? 'allow',
         outcome: changed ? 'changed' : 'unchanged',
+        details: { sessionId: caller.session?.id ?? null, reasons: options.reasons ?? [] },
       })
       return preview
     }, { isolation: options.isolation ?? 'read committed' })

@@ -1,6 +1,7 @@
 import { oc } from '@orpc/contract'
 import { openapi } from '@orpc/openapi'
 import { z } from 'zod'
+import { agent } from './agent.js'
 import {
   ApiKey,
   ApiKeyScope,
@@ -19,6 +20,9 @@ import {
   Match,
   MatchSuggestions,
   Me,
+  PendingAction,
+  PendingActionStatus,
+  ReversalRequest,
   Money,
   ReconException,
   Tag,
@@ -36,6 +40,11 @@ export const ERROR_STATUS = {
   DUPLICATE_REFERENCE: 409,
   INVALID_STATE: 409,
   ALLOCATION_REJECTED: 422,
+  APPROVAL_REQUIRED: 428,
+  BLOCKED: 403,
+  BUDGET_EXCEEDED: 403,
+  STEP_UP_REQUIRED: 403,
+  RATE_LIMITED: 429,
 } as const
 
 export const errors = {
@@ -65,6 +74,33 @@ export const errors = {
       })
       .strict(),
   },
+  APPROVAL_REQUIRED: {
+    message: 'This action waits for a person to approve it in the web app. Nothing has changed yet.',
+    data: z
+      .object({
+        pendingActionId: Id,
+        summary: z.string(),
+        approvalsRequired: z.number().int().min(1).max(2),
+        reasons: z.array(z.string()),
+        preview: z.unknown(),
+      })
+      .strict(),
+  },
+  BLOCKED: {
+    message: 'This action is not allowed.',
+    data: z.object({ reason: z.string() }).strict(),
+  },
+  BUDGET_EXCEEDED: {
+    message: 'This action would exceed the organization’s budget for it.',
+    data: z.object({ budget: z.string(), limit: z.string(), used: z.string() }).strict(),
+  },
+  STEP_UP_REQUIRED: {
+    message: 'Approving needs two-factor authentication and a recent sign-in. Sign in again, then retry.',
+    data: z.object({ reason: z.enum(['two_factor_required', 'session_too_old']) }).strict(),
+  },
+  RATE_LIMITED: {
+    message: 'Too many changes in a short time. Wait a minute and retry.',
+  },
 } as const
 
 const Reference = z
@@ -75,7 +111,15 @@ const Reference = z
   .regex(/[A-Za-z0-9]/, 'must contain a letter or digit')
 
 const base = oc.errors({ NOT_FOUND: errors.NOT_FOUND })
-const mutation = base.errors({ IDEMPOTENCY_CONFLICT: errors.IDEMPOTENCY_CONFLICT })
+const mutation = base.errors({ IDEMPOTENCY_CONFLICT: errors.IDEMPOTENCY_CONFLICT, RATE_LIMITED: errors.RATE_LIMITED })
+/** Guarded writes: may wait for approval, be blocked, or hit a budget. */
+const guarded = mutation.errors({
+  APPROVAL_REQUIRED: errors.APPROVAL_REQUIRED,
+  BLOCKED: errors.BLOCKED,
+  BUDGET_EXCEEDED: errors.BUDGET_EXCEEDED,
+})
+
+const Reason = z.string().trim().min(3).max(500).describe('Why, for the approver and the audit log.')
 
 const Preview = <T extends z.ZodType>(item: T) =>
   z.object({ dryRun: z.boolean(), changed: z.boolean(), result: item }).strict()
@@ -83,6 +127,7 @@ const Preview = <T extends z.ZodType>(item: T) =>
 export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
   me: {
     get: base
+      .meta(agent({ name: 'whoami', risk: 'read' }))
       .meta(
         openapi({
           method: 'GET',
@@ -98,6 +143,7 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
 
   transactions: {
     list: base
+      .meta(agent({ name: 'list_transactions', risk: 'read' }))
       .meta(
         openapi({
           method: 'GET',
@@ -124,6 +170,7 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       .output(page(Transaction)),
 
     get: base
+      .meta(agent({ name: 'get_transaction', risk: 'read' }))
       .meta(
         openapi({
           method: 'GET',
@@ -135,10 +182,38 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       )
       .input(z.object({ id: Id }).strict())
       .output(Transaction),
+
+    writeOffVariance: guarded
+      .errors({ STALE_STATE: errors.STALE_STATE, INVALID_STATE: errors.INVALID_STATE, ALLOCATION_REJECTED: errors.ALLOCATION_REJECTED })
+      .meta(agent({ name: 'write_off_variance', risk: 'destructive', budget: 'writeoffs' }))
+      .meta(
+        openapi({
+          method: 'POST',
+          path: '/transactions/{transactionId}/write-offs',
+          tags: ['transactions'],
+          summary: 'Write off an unallocated remainder',
+          description:
+            'Requests that part of a verified payment that will never be allocated (for example a small overpayment) be written off, so it stops showing as unallocated. Always waits for a person to approve it (APPROVAL_REQUIRED with a pendingActionId); amounts above the configured cap are refused outright. Use dryRun to preview. Does not refund anyone: use reversals.request to return money.',
+        }),
+      )
+      .input(
+        z
+          .object({
+            transactionId: Id,
+            version: Version,
+            amount: Money,
+            reason: Reason,
+            idempotencyKey: IdempotencyKey,
+            dryRun: DryRun,
+          })
+          .strict(),
+      )
+      .output(Preview(Transaction)),
   },
 
   expected: {
     list: base
+      .meta(agent({ name: 'list_expected_payments', risk: 'read' }))
       .meta(
         openapi({
           method: 'GET',
@@ -162,6 +237,7 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       .output(page(ExpectedPayment)),
 
     get: base
+      .meta(agent({ name: 'get_expected_payment', risk: 'read' }))
       .meta(
         openapi({
           method: 'GET',
@@ -174,8 +250,9 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       .input(z.object({ id: Id }).strict())
       .output(ExpectedPayment),
 
-    create: mutation
+    create: guarded
       .errors({ DUPLICATE_REFERENCE: errors.DUPLICATE_REFERENCE })
+      .meta(agent({ name: 'create_expected_payment', risk: 'write' }))
       .meta(
         openapi({
           method: 'POST',
@@ -201,12 +278,13 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       )
       .output(Preview(ExpectedPayment)),
 
-    update: mutation
+    update: guarded
       .errors({
         STALE_STATE: errors.STALE_STATE,
         DUPLICATE_REFERENCE: errors.DUPLICATE_REFERENCE,
         INVALID_STATE: errors.INVALID_STATE,
       })
+      .meta(agent({ name: 'update_expected_payment', risk: 'write' }))
       .meta(
         openapi({
           method: 'PATCH',
@@ -233,10 +311,27 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
           .strict(),
       )
       .output(Preview(ExpectedPayment)),
+
+    void: guarded
+      .errors({ STALE_STATE: errors.STALE_STATE, INVALID_STATE: errors.INVALID_STATE })
+      .meta(agent({ name: 'void_expected_payment', risk: 'destructive' }))
+      .meta(
+        openapi({
+          method: 'POST',
+          path: '/expected-payments/{id}/void',
+          tags: ['expected-payments'],
+          summary: 'Void an expected payment',
+          description:
+            'Requests that an expected payment nobody will pay be cancelled, reversing its invoice in the ledger. Only possible while nothing is allocated to it (unmatch first). Always waits for a person to approve it (APPROVAL_REQUIRED with a pendingActionId). Pass the version you read.',
+        }),
+      )
+      .input(z.object({ id: Id, version: Version, reason: Reason, idempotencyKey: IdempotencyKey, dryRun: DryRun }).strict())
+      .output(Preview(ExpectedPayment)),
   },
 
   exceptions: {
     list: base
+      .meta(agent({ name: 'list_exceptions', risk: 'read' }))
       .meta(
         openapi({
           method: 'GET',
@@ -260,6 +355,7 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       .output(page(ReconException)),
 
     get: base
+      .meta(agent({ name: 'get_exception', risk: 'read' }))
       .meta(
         openapi({
           method: 'GET',
@@ -274,6 +370,7 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
 
     annotate: mutation
       .errors({ STALE_STATE: errors.STALE_STATE })
+      .meta(agent({ name: 'annotate_exception', risk: 'write', approval: 'never' }))
       .meta(
         openapi({
           method: 'POST',
@@ -299,8 +396,9 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       )
       .output(Preview(ReconException)),
 
-    resolve: mutation
+    resolve: guarded
       .errors({ STALE_STATE: errors.STALE_STATE, INVALID_STATE: errors.INVALID_STATE })
+      .meta(agent({ name: 'resolve_exception', risk: 'write' }))
       .meta(
         openapi({
           method: 'POST',
@@ -328,6 +426,7 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
 
   matches: {
     list: base
+      .meta(agent({ name: 'list_matches', risk: 'read' }))
       .meta(
         openapi({
           method: 'GET',
@@ -352,6 +451,7 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       .output(page(Match)),
 
     suggest: base
+      .meta(agent({ name: 'suggest_matches', risk: 'read' }))
       .meta(
         openapi({
           method: 'GET',
@@ -365,8 +465,9 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       .input(z.object({ transactionId: Id }).strict())
       .output(MatchSuggestions),
 
-    confirm: mutation
+    confirm: guarded
       .errors({ STALE_STATE: errors.STALE_STATE, INVALID_STATE: errors.INVALID_STATE, ALLOCATION_REJECTED: errors.ALLOCATION_REJECTED })
+      .meta(agent({ name: 'confirm_match', risk: 'write' }))
       .meta(
         openapi({
           method: 'POST',
@@ -392,6 +493,99 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
           .strict(),
       )
       .output(Preview(Match)),
+
+    unmatch: guarded
+      .errors({ INVALID_STATE: errors.INVALID_STATE })
+      .meta(agent({ name: 'unmatch', risk: 'destructive' }))
+      .meta(
+        openapi({
+          method: 'POST',
+          path: '/matches/{id}/unmatch',
+          tags: ['matches'],
+          summary: 'Undo a match',
+          description:
+            'Requests that a match be undone: its allocations stop counting, the expected payments reopen and the ledger entry is reversed; the payment becomes unallocated again. Always waits for a person to approve it (APPROVAL_REQUIRED with a pendingActionId). Use dryRun to preview.',
+        }),
+      )
+      .input(z.object({ id: Id, reason: Reason, idempotencyKey: IdempotencyKey, dryRun: DryRun }).strict())
+      .output(Preview(Match)),
+  },
+
+  reversals: {
+    request: guarded
+      .errors({ STALE_STATE: errors.STALE_STATE, INVALID_STATE: errors.INVALID_STATE })
+      .meta(agent({ name: 'request_reversal', risk: 'destructive', money: true, approvers: 2, budget: 'reversals' }))
+      .meta(
+        openapi({
+          method: 'POST',
+          path: '/transactions/{transactionId}/reversal',
+          tags: ['reversals'],
+          summary: 'Request an M-Pesa reversal',
+          description:
+            'Requests that a verified, unallocated payment be reversed back to the payer through M-Pesa. Moves money: it always needs two different approvers in the web app and is never executed automatically. Unmatch first if the payment is allocated. The reversal runs only after approval, and the payment shows as reversed only when Safaricom confirms it.',
+        }),
+      )
+      .input(z.object({ transactionId: Id, version: Version, reason: Reason, idempotencyKey: IdempotencyKey, dryRun: DryRun }).strict())
+      .output(Preview(ReversalRequest)),
+  },
+
+  pendingActions: {
+    list: base
+      .meta(agent({ name: 'list_pending_actions', risk: 'read' }))
+      .meta(
+        openapi({
+          method: 'GET',
+          path: '/pending-actions',
+          tags: ['approvals'],
+          summary: 'List actions waiting for approval',
+          description:
+            'Lists guarded actions and their approval state, newest first; defaults to those still pending. Only people approve them, in the web app; there is no way to approve through the API or as an agent.',
+        }),
+      )
+      .input(z.object({ status: PendingActionStatus.default('pending'), limit: Limit, cursor: Cursor.optional() }).strict())
+      .output(page(PendingAction)),
+
+    get: base
+      .meta(agent({ name: 'get_pending_action', risk: 'read' }))
+      .meta(
+        openapi({
+          method: 'GET',
+          path: '/pending-actions/{id}',
+          tags: ['approvals'],
+          summary: 'Get one action waiting for approval',
+          description:
+            'Returns a guarded action with its approvals and, once executed, its result. Use it to follow up on an APPROVAL_REQUIRED answer.',
+        }),
+      )
+      .input(z.object({ id: Id }).strict())
+      .output(PendingAction),
+  },
+
+  approvals: {
+    decide: mutation
+      .errors({ STALE_STATE: errors.STALE_STATE, INVALID_STATE: errors.INVALID_STATE, STEP_UP_REQUIRED: errors.STEP_UP_REQUIRED })
+      .meta(
+        openapi({
+          method: 'POST',
+          path: '/pending-actions/{id}/decide',
+          tags: ['approvals'],
+          summary: 'Approve or reject an action',
+          description:
+            'Web app only, for people with an approver role and two-factor authentication who signed in recently. The requester can never decide on their own request; money actions need two different approvers. When the last approval arrives the action runs once; if what it changes moved meanwhile, it fails with STALE_STATE and must be requested again.',
+        }),
+      )
+      .input(
+        z
+          .object({
+            id: Id,
+            version: Version,
+            decision: z.enum(['approve', 'reject']),
+            note: z.string().trim().max(1000).optional(),
+            idempotencyKey: IdempotencyKey,
+          })
+          .strict(),
+      )
+      .output(PendingAction),
   },
 
   apiKeys: {
@@ -458,6 +652,7 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
 
   reports: {
     dailySummary: base
+      .meta(agent({ name: 'daily_summary', risk: 'read' }))
       .meta(
         openapi({
           method: 'GET',

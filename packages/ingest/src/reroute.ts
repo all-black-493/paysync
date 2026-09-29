@@ -31,6 +31,7 @@ export async function rerouteUnrouted(deps: IngestDeps, source: Source, external
     case 'queue_timeout':
       return ingestDarajaResult(deps, 'timeout', 'transaction_status', body)
     case 'reversal_result':
+      return ingestDarajaResult(deps, 'result', 'reversal', body)
     case 'pull':
     case 'statement':
       return null

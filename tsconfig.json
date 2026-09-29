@@ -24,6 +24,12 @@
     },
     {
       "path": "packages/matching"
+    },
+    {
+      "path": "packages/guard"
+    },
+    {
+      "path": "packages/audit"
     }
   ]
 }

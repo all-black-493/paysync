@@ -3,7 +3,7 @@ import type { Sealer } from '@paysync/platform'
 /** Personal fields inside callback bodies; sealed before the body is stored. */
 const PII_FIELDS = new Set(['MSISDN', 'FirstName', 'MiddleName', 'LastName'])
 /** `{ Name, Value }` items (STK) and `{ Key, Value }` result parameters whose value is personal. */
-const PII_ITEMS = new Set(['PhoneNumber', 'DebitPartyName', 'CreditPartyName'])
+const PII_ITEMS = new Set(['PhoneNumber', 'DebitPartyName', 'CreditPartyName', 'CreditPartyPublicName', 'DebitPartyPublicName'])
 
 interface SealedValue {
   readonly $sealed: string

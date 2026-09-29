@@ -3,20 +3,15 @@ import { CONSTRAINTS, SQLSTATE, pgConstraint, pgErrorCode, postInvoice, schema, 
 import { and, asc, count, desc, eq, gt, gte, inArray, lt, ne, or, sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 import { authed, os } from './base.js'
-import {
-  iso,
-  normalizeReference,
-  pageOf,
-  toException,
-  toExpectedPayment,
-  toTransaction,
-} from './mappers.js'
+import { iso, normalizeReference, pageOf, toException, toExpectedPayment } from './mappers.js'
 import { apiKeyProcedures } from './api-keys.js'
+import { approvalProcedures, pendingActionProcedures } from './approvals/index.js'
+import { expectedVoid, reversalsRequest, transactionsWriteOffVariance } from './guarded-procedures.js'
 import { exceptionsResolve, matchingProcedures } from './matching.js'
 import { mutate } from './mutate.js'
-import { allocatedByTransaction, paidByExpectedPayment, toBigInt } from './queries.js'
+import { allocatedByTransaction, listTransactions, paidByExpectedPayment, toBigInt } from './queries.js'
 
-const { allocation, exception, expectedPayment, match, mpesaTransaction, organization, shortcode } = schema
+const { allocation, exception, expectedPayment, match, mpesaTransaction, organization } = schema
 
 const previewOf = <T extends z.ZodType>(item: T) => z.object({ dryRun: z.boolean(), changed: z.boolean(), result: item })
 
@@ -34,23 +29,6 @@ const me = authed.me.get.handler(async ({ context }) => {
     permissions: context.permix.dehydrate(),
   }
 })
-
-async function listTransactions(tx: Tx, where: SQL | undefined, limit: number) {
-  const allocated = allocatedByTransaction(tx)
-  const rows = await tx
-    .select({
-      t: mpesaTransaction,
-      s: { id: shortcode.id, code: shortcode.code, kind: shortcode.kind },
-      allocated: allocated.total,
-    })
-    .from(mpesaTransaction)
-    .innerJoin(shortcode, eq(shortcode.id, mpesaTransaction.shortcodeId))
-    .leftJoin(allocated, eq(allocated.transactionId, mpesaTransaction.id))
-    .where(where)
-    .orderBy(desc(mpesaTransaction.id))
-    .limit(limit)
-  return rows.map((r) => toTransaction(r.t, r.s, toBigInt(r.allocated)))
-}
 
 const transactionsList = authed.transactions.list.handler(async ({ context, input }) =>
   withOrg(context.db, context.caller.orgId, async (tx) => {
@@ -384,10 +362,13 @@ const dailySummary = authed.reports.dailySummary.handler(async ({ context, input
 export const router = os.router({
   apiKeys: apiKeyProcedures,
   me: { get: me },
-  transactions: { list: transactionsList, get: transactionsGet },
-  expected: { list: expectedList, get: expectedGet, create: expectedCreate, update: expectedUpdate },
+  transactions: { list: transactionsList, get: transactionsGet, writeOffVariance: transactionsWriteOffVariance },
+  expected: { list: expectedList, get: expectedGet, create: expectedCreate, update: expectedUpdate, void: expectedVoid },
   exceptions: { list: exceptionsList, get: exceptionsGet, annotate: exceptionsAnnotate, resolve: exceptionsResolve },
   matches: { list: matchesList, ...matchingProcedures },
+  reversals: { request: reversalsRequest },
+  pendingActions: pendingActionProcedures,
+  approvals: approvalProcedures,
   reports: { dailySummary },
 })
 

@@ -1,0 +1,2 @@
+ALTER TABLE "core"."exception" DROP CONSTRAINT "exception_kind";--> statement-breakpoint
+ALTER TABLE "core"."exception" ADD CONSTRAINT "exception_kind" CHECK (kind IN ('no_match', 'low_confidence', 'partial_payment', 'overpayment', 'duplicate', 'verification_failed', 'amount_mismatch', 'balance_variance', 'job_failed', 'missing_callback', 'reversal_failed'));

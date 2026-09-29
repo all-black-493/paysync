@@ -1,14 +1,15 @@
-import { Match, ReconException, fromMoney } from '@paysync/contract'
+import { ReconException } from '@paysync/contract'
 import { schema, withOrg, type Tx } from '@paysync/db'
-import { MatchError, applyMatch, loadCandidates, readTransaction, resolveMatchExceptions, suggest } from '@paysync/matching'
+import { loadCandidates, readTransaction, suggest } from '@paysync/matching'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { authed } from './base.js'
-import { iso, toException, toExpectedPayment, toTransaction } from './mappers.js'
+import { matchesConfirm, matchesUnmatch } from './guarded-procedures.js'
+import { toException, toExpectedPayment, toTransaction } from './mappers.js'
 import { mutate } from './mutate.js'
 import { paidByExpectedPayment, toBigInt } from './queries.js'
 
-const { allocation, exception, expectedPayment, match, mpesaTransaction, shortcode } = schema
+const { exception, expectedPayment, mpesaTransaction, shortcode } = schema
 
 const previewOf = <T extends z.ZodType>(item: T) => z.object({ dryRun: z.boolean(), changed: z.boolean(), result: item })
 
@@ -19,21 +20,6 @@ async function loadTransaction(tx: Tx, transactionId: string) {
     .innerJoin(shortcode, eq(shortcode.id, mpesaTransaction.shortcodeId))
     .where(eq(mpesaTransaction.id, transactionId))
   return row
-}
-
-async function toMatchOutput(tx: Tx, matchId: string) {
-  const [m] = await tx.select().from(match).where(eq(match.id, matchId))
-  if (!m) throw new Error('match not visible after insert')
-  const parts = await tx.select().from(allocation).where(eq(allocation.matchId, m.id))
-  return {
-    id: m.id,
-    transactionId: m.transactionId,
-    method: m.method,
-    status: m.status,
-    confidence: m.confidence === null ? null : Number(m.confidence),
-    allocations: parts.map((a) => ({ expectedPaymentId: a.expectedPaymentId, amount: { minor: a.amount.toString(), currency: 'KES' as const } })),
-    createdAt: iso(m.createdAt),
-  }
 }
 
 const matchesSuggest = authed.matches.suggest.handler(async ({ context, input, errors }) =>
@@ -54,7 +40,7 @@ const matchesSuggest = authed.matches.suggest.handler(async ({ context, input, e
             .where(inArray(expectedPayment.id, ranked.map((r) => r.expectedPaymentId)))
     const byId = new Map(rows.map((r) => [r.e.id, toExpectedPayment(r.e, toBigInt(r.paid))]))
     return {
-      transaction: toTransaction(found.t, found.s, payment.allocated),
+      transaction: toTransaction(found.t, found.s, payment.allocations, payment.writtenOff),
       suggestions: ranked.flatMap((r) => {
         const expected = byId.get(r.expectedPaymentId)
         return expected
@@ -62,54 +48,6 @@ const matchesSuggest = authed.matches.suggest.handler(async ({ context, input, e
           : []
       }),
     }
-  }),
-)
-
-const matchesConfirm = authed.matches.confirm.handler(async ({ context, input, errors }) =>
-  mutate({
-    db: context.db,
-    caller: context.caller,
-    surface: context.surface,
-    action: 'matches.confirm',
-    input,
-    output: previewOf(Match),
-    isolation: 'serializable',
-    run: async (tx) => {
-      let matchId: string
-      try {
-        ;({ matchId } = await applyMatch(tx, {
-          orgId: context.caller.orgId,
-          transactionId: input.transactionId,
-          expectedVersion: input.version,
-          method: 'manual',
-          parts: input.allocations.map((a) => ({ expectedPaymentId: a.expectedPaymentId, amount: fromMoney(a.amount) })),
-          actorUserId: context.caller.kind === 'user' ? context.caller.actorId : null,
-          createdBy: `${context.caller.kind}:${context.caller.actorId}`,
-        }))
-      } catch (error) {
-        if (!(error instanceof MatchError)) throw error
-        switch (error.code) {
-          case 'NOT_FOUND':
-            throw errors.NOT_FOUND()
-          case 'STALE_STATE':
-            throw errors.STALE_STATE({ data: { currentVersion: Number(error.details.currentVersion) } })
-          case 'NOT_VERIFIED':
-          case 'EXPECTED_CLOSED':
-            throw errors.INVALID_STATE({ data: { status: error.details.status ?? error.code } })
-          case 'EXCEEDS_DUE':
-          case 'EXCEEDS_AMOUNT':
-            throw errors.ALLOCATION_REJECTED({
-              data: {
-                ...(error.details.expectedPaymentId ? { expectedPaymentId: error.details.expectedPaymentId } : {}),
-                ...(error.details.unallocatedMinor ? { unallocated: error.details.unallocatedMinor } : {}),
-                ...(error.details.dueMinor ? { due: error.details.dueMinor } : {}),
-              },
-            })
-        }
-      }
-      await resolveMatchExceptions(tx, input.transactionId, 'Matched by hand.')
-      return { changed: true, result: await toMatchOutput(tx, matchId) }
-    },
   }),
 )
 
@@ -137,5 +75,5 @@ const exceptionsResolve = authed.exceptions.resolve.handler(async ({ context, in
   }),
 )
 
-export const matchingProcedures = { suggest: matchesSuggest, confirm: matchesConfirm }
+export const matchingProcedures = { suggest: matchesSuggest, confirm: matchesConfirm, unmatch: matchesUnmatch }
 export { exceptionsResolve }

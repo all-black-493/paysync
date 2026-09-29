@@ -12,7 +12,8 @@ import { and, eq } from 'drizzle-orm'
 import { permissionFor } from './permissions.js'
 import { permix } from './permix.js'
 
-export type Surface = 'web' | 'rest'
+/** Where a call comes from. The agent surfaces (AI SDK, MCP) arrive in M7/M8. */
+export type Surface = 'web' | 'rest' | 'ai-sdk' | 'mcp'
 
 export interface InitialContext extends RequestHeadersHandlerPluginContext, ResponseHeadersHandlerPluginContext {
   readonly auth: Auth
@@ -30,6 +31,8 @@ export interface Caller {
   readonly orgId: string
   /** Organization role, or `api_key:<scope>`. */
   readonly role: string
+  /** For signed-in users: what approvals check (§6C.4). */
+  readonly session: { readonly id: string; readonly createdAt: Date; readonly twoFactorEnabled: boolean } | null
 }
 
 export const os = implement(contract).$context<InitialContext>()
@@ -60,6 +63,7 @@ async function apiKeyCaller(context: InitialContext, key: string): Promise<Resol
       email: null,
       orgId: result.key.referenceId,
       role: `api_key:${scope}`,
+      session: null,
     },
     rules: INTEGRATOR_RULES[scope],
   }
@@ -91,6 +95,11 @@ async function sessionCaller(context: InitialContext): Promise<Resolved> {
       email: session.user.email,
       orgId,
       role: member.role,
+      session: {
+        id: session.session.id,
+        createdAt: new Date(session.session.createdAt),
+        twoFactorEnabled: session.user.twoFactorEnabled === true,
+      },
     },
     rules: rulesForMember(member.role),
   }

@@ -5,7 +5,7 @@ import { betterAuth, type BetterAuthOptions } from 'better-auth'
 import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { and, asc, eq, gt, sql } from 'drizzle-orm'
 import { z } from 'zod'
-import { organization } from 'better-auth/plugins'
+import { organization, twoFactor } from 'better-auth/plugins'
 import { ac, roles } from '@paysync/auth'
 
 export const API_KEY_CONFIG = 'integrator'
@@ -31,6 +31,8 @@ function authOptions(options: AuthOptions) {
     trustedOrigins: [options.baseURL],
     database: drizzleAdapter(options.db, { provider: 'pg', schemaName: 'auth' }),
     emailAndPassword: { enabled: true, minPasswordLength: 12 },
+    // Better Auth's own sensitive endpoints need a session this recent; approvals check their own step-up age.
+    session: { freshAge: 10 * 60 },
     rateLimit: { enabled: true, storage: 'database' },
     advanced: {
       cookiePrefix: 'paysync',
@@ -39,6 +41,8 @@ function authOptions(options: AuthOptions) {
     },
     plugins: [
       organization({ ac, roles, creatorRole: 'owner' }),
+      // TOTP second factor; approvers must have it (§6C.4).
+      twoFactor({ issuer: 'Paysync' }),
       apiKey([
         {
           configId: API_KEY_CONFIG,

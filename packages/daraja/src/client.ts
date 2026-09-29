@@ -284,6 +284,32 @@ export class DarajaClient {
     })
   }
 
+  /**
+   * Reverses a C2B payment back to the payer; the answer arrives on the Result
+   * URL. Moves money, so it is never retried: a failed call has an unknown
+   * outcome and must be checked by a person.
+   */
+  async reversal(input: { shortcode: string; receiptNumber: string; amountMinor: bigint; remarks: string } & ResultUrls) {
+    const initiator = this.initiator()
+    const remarks = input.remarks.trim().slice(0, 100)
+    if (remarks.length < 2) throw new DarajaError('reversal remarks need 2 to 100 characters', noRetry)
+    return this.call('/mpesa/reversal/v1/request', AsyncRequestResponse, {
+      retry: false,
+      body: {
+        Initiator: initiator.name,
+        SecurityCredential: initiator.securityCredential,
+        CommandID: 'TransactionReversal',
+        TransactionID: input.receiptNumber,
+        Amount: String(toWholeShillings(input.amountMinor)),
+        ReceiverParty: input.shortcode,
+        // Spelled this way by Daraja.
+        RecieverIdentifierType: '11',
+        Remarks: remarks,
+        ...this.resultUrls(input),
+      },
+    })
+  }
+
   /** One page of C2B transactions in a window (the last 48 hours at most). */
   async pullTransactions(input: { shortcode: string; start: Date; end: Date; offset: number }) {
     return this.call('/pulltransactions/v1/query', PullResponse, {

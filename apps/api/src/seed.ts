@@ -3,6 +3,7 @@ import type { RoleName } from '@paysync/auth'
 import { createAuth, type Auth } from './auth.js'
 import { createDb, createPool, postInvoice, postReceipt, schema, withOrg, type Db } from '@paysync/db'
 import { applyMatch } from '@paysync/matching'
+import { enrollDemoApprovers } from './dev/approvers.js'
 import { ConfigError, DATABASE_SECRETS, commonEnvShape, createLogger, databaseEnvShape, loadConfig } from '@paysync/platform'
 import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
@@ -211,6 +212,8 @@ async function main(): Promise<void> {
     const auth = createAuth({ db, secret: config.BETTER_AUTH_SECRET, baseURL: config.PUBLIC_URL })
     for (const plan of PLANS) await seedOrg(auth, db, plan, config.SEED_PASSWORD)
     await ensureSandboxShortcodes(db)
+    const approvers = PLANS.flatMap((p) => p.members.filter((m) => m.role !== 'clerk' && m.role !== 'viewer').map((m) => m.email))
+    await enrollDemoApprovers(auth, db, approvers, config.SEED_PASSWORD, logger)
     logger.info(
       { users: PLANS.flatMap((p) => p.members.map((m) => `${m.email} (${m.role})`)) },
       'demo data ready; every user signs in with the seed password',

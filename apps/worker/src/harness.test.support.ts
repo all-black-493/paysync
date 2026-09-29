@@ -31,6 +31,8 @@ export class FakeDaraja {
   pullRecords: PullRecord[] = []
   /** Runs before the synchronous answer, e.g. to deliver the result early. */
   onAsyncRequest: ((call: DarajaCall, ids: { OriginatorConversationID: string; ConversationID: string }) => Promise<void>) | null = null
+  /** Paths that answer HTTP 500 (a failed call whose outcome is unknown). */
+  readonly failing = new Set<string>()
   private sequence = 0
 
   callsTo(path: string): DarajaCall[] {
@@ -43,6 +45,7 @@ export class FakeDaraja {
     const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as Record<string, unknown>
     const call = { path, body }
     this.calls.push(call)
+    if (this.failing.has(path)) return Response.json({ requestId: 'r', errorCode: '500.003.1001', errorMessage: 'Internal Server Error' }, { status: 500 })
     switch (path) {
       case '/mpesa/stkpushquery/v1/query': {
         const answer = this.stk.get(String(body.CheckoutRequestID))
@@ -50,7 +53,8 @@ export class FakeDaraja {
         return Response.json({ ResponseCode: '0', ResponseDescription: 'ok', MerchantRequestID: 'm', CheckoutRequestID: body.CheckoutRequestID, ...answer })
       }
       case '/mpesa/transactionstatus/v1/query':
-      case '/mpesa/accountbalance/v1/query': {
+      case '/mpesa/accountbalance/v1/query':
+      case '/mpesa/reversal/v1/request': {
         const n = ++this.sequence
         const ids = { OriginatorConversationID: `orig-${n}`, ConversationID: `AG_TEST_${n}` }
         await this.onAsyncRequest?.(call, ids)

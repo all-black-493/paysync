@@ -40,5 +40,6 @@ export {
   type TransactionStatusResult,
 } from './results.js'
 export { createSecurityCredential, darajaCertificate } from './security.js'
+export { normalizeReversalResult, type ReversalResult } from './reversal-result.js'
 export { formatDarajaTimestamp, parseDarajaTimestamp } from './time.js'
 export { buildScenario, replay, type CallbackKind, type Delivery, type ReplayResult, type ScenarioOptions } from './simulator.js'

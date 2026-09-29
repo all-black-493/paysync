@@ -11,15 +11,19 @@ type PermissionMap<T> = {
  */
 export const PERMISSIONS = {
   me: { get: null },
-  transactions: { list: 'transaction.read', get: 'transaction.read' },
+  transactions: { list: 'transaction.read', get: 'transaction.read', writeOffVariance: 'transaction.writeOff' },
   expected: {
     list: 'expectedPayment.read',
     get: 'expectedPayment.read',
     create: 'expectedPayment.create',
     update: 'expectedPayment.update',
+    void: 'expectedPayment.void',
   },
   exceptions: { list: 'exception.read', get: 'exception.read', annotate: 'exception.annotate', resolve: 'exception.resolve' },
-  matches: { list: 'match.read', suggest: 'match.suggest', confirm: 'match.confirm' },
+  matches: { list: 'match.read', suggest: 'match.suggest', confirm: 'match.confirm', unmatch: 'match.unmatch' },
+  reversals: { request: 'reversal.request' },
+  pendingActions: { list: 'pendingAction.read', get: 'pendingAction.read' },
+  approvals: { decide: 'approval.approve' },
   apiKeys: { list: 'apiKey.read', create: 'apiKey.create', revoke: 'apiKey.delete' },
   reports: { dailySummary: 'report.read' },
 } satisfies PermissionMap<Contract>

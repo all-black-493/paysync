@@ -5,6 +5,10 @@ export const CONSTRAINTS = {
   journalBalanced: 'ledger_journal_balanced',
   allocationWithinAmount: 'core_allocation_within_amount',
   allocationWithinDue: 'core_allocation_within_due',
+  pendingActionKey: 'pending_action_orgId_idempotencyKey_unique',
+  approvalNotRequester: 'agent_approval_not_requester',
+  approvalPendingOnly: 'agent_approval_pending_only',
+  approvalOncePerApprover: 'approval_pendingActionId_approverUserId_unique',
 } as const
 
 export const SQLSTATE = {

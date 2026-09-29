@@ -11,7 +11,7 @@ export interface ResultBase {
   readonly originatorConversationId: string
 }
 
-function base(result: DarajaResult): ResultBase {
+export function resultBase(result: DarajaResult): ResultBase {
   const r = result.Result
   return {
     succeeded: r.ResultCode === '0',
@@ -33,7 +33,7 @@ export function resultParameters(result: DarajaResult): Map<string, string> {
   return params
 }
 
-function optionalTimestamp(value: string | undefined): Date | null {
+export function optionalTimestamp(value: string | undefined): Date | null {
   if (value === undefined || value === '') return null
   try {
     return parseDarajaTimestamp(value)
@@ -56,7 +56,7 @@ export function normalizeTransactionStatusResult(result: DarajaResult): Transact
   const params = resultParameters(result)
   const amount = params.get('Amount')
   return {
-    ...base(result),
+    ...resultBase(result),
     receiptNumber: params.get('ReceiptNo') ?? null,
     amountMinor: amount === undefined ? null : parseAmount(amount),
     transactionStatus: params.get('TransactionStatus') ?? null,
@@ -108,7 +108,7 @@ export function normalizeAccountBalanceResult(result: DarajaResult): AccountBala
   const params = resultParameters(result)
   const balance = params.get('AccountBalance')
   return {
-    ...base(result),
+    ...resultBase(result),
     accounts: balance === undefined ? [] : parseAccountBalance(balance),
     completedAt: optionalTimestamp(params.get('BOCompletedTime')),
   }

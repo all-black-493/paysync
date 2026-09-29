@@ -66,11 +66,60 @@ export const Transaction = z
     billRefNumber: untrusted(z.string()).nullable(),
     shortcode: ShortcodeSummary,
     allocated: Money,
+    writtenOff: Money.describe('Unallocated remainder written off with approval (transactions.writeOffVariance).'),
     unallocated: Money,
     version: z.number().int(),
   })
   .strict()
   .meta({ id: 'Transaction' })
+
+export const PendingActionStatus = z.enum(['pending', 'rejected', 'executed', 'failed', 'expired'])
+
+export const PendingAction = z
+  .object({
+    id: Id,
+    procedure: z.string(),
+    risk: z.enum(['read', 'write', 'destructive']),
+    money: z.boolean(),
+    summary: z.string(),
+    reasons: z.array(z.string()),
+    input: z.unknown().describe('The request exactly as it will run on approval.'),
+    preview: z.unknown().describe('What the action would change, from a dry run at request time.'),
+    requestedBy: z.object({ id: z.string(), name: z.string().nullable() }).strict(),
+    surface: z.string(),
+    status: PendingActionStatus,
+    approvalsRequired: z.number().int().min(1).max(2),
+    approvals: z.array(
+      z
+        .object({
+          approverId: z.string(),
+          approverName: z.string().nullable(),
+          decision: z.enum(['approve', 'reject']),
+          note: z.string().nullable(),
+          at: IsoDateTime,
+        })
+        .strict(),
+    ),
+    result: z.unknown(),
+    error: z.string().nullable(),
+    createdAt: IsoDateTime,
+    expiresAt: IsoDateTime,
+    decidedAt: IsoDateTime.nullable(),
+    version: z.number().int(),
+  })
+  .strict()
+  .meta({ id: 'PendingAction' })
+
+export const ReversalRequest = z
+  .object({
+    transactionId: Id,
+    receiptNumber: z.string(),
+    amount: Money,
+    status: z.enum(['queued']),
+    reason: z.string(),
+  })
+  .strict()
+  .meta({ id: 'ReversalRequest' })
 
 export const ExpectedPaymentStatus = z.enum(['open', 'partially_paid', 'paid', 'void'])
 
@@ -102,6 +151,7 @@ export const ExceptionKind = z.enum([
   'balance_variance',
   'job_failed',
   'missing_callback',
+  'reversal_failed',
 ])
 export const ExceptionStatus = z.enum(['open', 'resolved', 'dismissed'])
 
@@ -188,6 +238,7 @@ export const Permissions = z
     exception: flags('read', 'annotate', 'resolve'),
     match: flags('read', 'suggest', 'confirm', 'unmatch'),
     report: flags('read'),
+    pendingAction: flags('read'),
     reconciliation: flags('run'),
     approval: flags('approve'),
     reversal: flags('request'),
@@ -236,6 +287,8 @@ export type TransactionOutput = z.output<typeof Transaction>
 export type ExpectedPaymentOutput = z.output<typeof ExpectedPayment>
 export type ExceptionOutput = z.output<typeof ReconException>
 export type MatchOutput = z.output<typeof Match>
+export type PendingActionOutput = z.output<typeof PendingAction>
 export type MatchSuggestionsOutput = z.output<typeof MatchSuggestions>
 export type DailySummaryOutput = z.output<typeof DailySummary>
 export type ApiKeyOutput = z.output<typeof ApiKey>
+export type MeOutput = z.output<typeof Me>

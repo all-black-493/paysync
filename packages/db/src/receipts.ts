@@ -11,6 +11,7 @@ export const RECEIPT_ACCOUNTS = {
   suspense: { code: 'suspense', name: 'Unallocated receipts', kind: 'liability' },
   receivables: { code: 'receivables', name: 'Receivables', kind: 'asset' },
   income: { code: 'invoiced_income', name: 'Invoiced income', kind: 'income' },
+  variance: { code: 'variance_income', name: 'Written-off variances', kind: 'income' },
 } as const satisfies Record<string, { code: string; name: string; kind: AccountKind }>
 
 export async function ensureAccount(

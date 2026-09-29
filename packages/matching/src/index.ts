@@ -17,6 +17,7 @@ export {
   lockTransaction,
   readTransaction,
   resolveMatchExceptions,
+  undoMatch,
   type ApplyMatchInput,
   type TransactionForMatching,
 } from './store.js'

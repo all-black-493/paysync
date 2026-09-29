@@ -19,6 +19,7 @@ export const JOB_PAYLOADS = {
   pull_transactions: z.object({ orgId: OrgId, shortcodeId: Uuid }),
   request_balance: z.object({ orgId: OrgId, shortcodeId: Uuid }),
   match_transaction: z.object({ orgId: OrgId, transactionId: Uuid }),
+  execute_reversal: z.object({ orgId: OrgId, darajaRequestId: Uuid }),
 } as const
 
 export type JobName = keyof typeof JOB_PAYLOADS
@@ -31,6 +32,8 @@ const MAX_ATTEMPTS: Record<JobName, number> = {
   pull_transactions: 5,
   request_balance: 3,
   match_transaction: 5,
+  // Moves money: never retried blindly; the outcome comes from the result or Transaction Status (§5.2).
+  execute_reversal: 1,
 }
 export type JobPayload<N extends JobName> = z.output<(typeof JOB_PAYLOADS)[N]>
 

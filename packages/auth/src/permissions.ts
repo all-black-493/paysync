@@ -7,6 +7,7 @@ export type PermissionsDefinition = ValidateDefinition<{
   exception: ['read', 'annotate', 'resolve']
   match: ['read', 'suggest', 'confirm', 'unmatch']
   report: ['read']
+  pendingAction: ['read']
   reconciliation: ['run']
   approval: ['approve']
   reversal: ['request']
@@ -21,6 +22,7 @@ const none = {
   exception: { read: false, annotate: false, resolve: false },
   match: { read: false, suggest: false, confirm: false, unmatch: false },
   report: { read: false },
+  pendingAction: { read: false },
   reconciliation: { run: false },
   approval: { approve: false },
   reversal: { request: false },
@@ -34,6 +36,7 @@ const viewer = createRules<PermissionsDefinition>({
   exception: { read: true, annotate: false, resolve: false },
   match: { read: true, suggest: true, confirm: false, unmatch: false },
   report: { read: true },
+  pendingAction: { read: true },
 })
 
 // A clerk may request destructive actions; they go through approval (M5).

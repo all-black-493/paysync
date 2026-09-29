@@ -4,9 +4,10 @@ import { isDefinedError } from '@orpc/client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type SubmitEvent } from 'react'
 import { field, formatKes, newIdempotencyKey, parseKes } from '../lib/format'
-import { orpc } from '../lib/orpc'
+import { client, orpc } from '../lib/orpc'
+import { RequestAction } from './request-action'
 
-export function ExpectedPanel({ canWrite }: { canWrite: boolean }) {
+export function ExpectedPanel({ canWrite, canVoid }: { canWrite: boolean; canVoid: boolean }) {
   const list = useQuery(orpc.expected.list.queryOptions({ input: {} }))
   return (
     <section>
@@ -22,6 +23,7 @@ export function ExpectedPanel({ canWrite }: { canWrite: boolean }) {
               <th className="num">Amount due</th>
               <th className="num">Paid</th>
               <th>Status</th>
+              {canVoid ? <th>Requests</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -34,6 +36,17 @@ export function ExpectedPanel({ canWrite }: { canWrite: boolean }) {
                 <td>
                   <span className={`badge ${e.status}`}>{e.status.replace('_', ' ')}</span>
                 </td>
+                {canVoid ? (
+                  <td>
+                    {e.status === 'open' ? (
+                      <RequestAction
+                        label="Void"
+                        submitLabel="Request void"
+                        submit={({ reason, idempotencyKey }) => client.expected.void({ id: e.id, version: e.version, reason, idempotencyKey })}
+                      />
+                    ) : null}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>

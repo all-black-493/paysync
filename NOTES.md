@@ -5,6 +5,62 @@ Newest milestone first.
 
 ---
 
+## M5: Guard (static) — done 2026-09-30
+
+### Done-when evidence
+
+"Every guard path is tested; the approval flow works end-to-end in `web`."
+
+| Check | How | Result |
+|---|---|---|
+| Decision paths | `packages/guard/src/decide.test.ts`: no agent meta → block (fail closed), `exposeTo`, people vs agents, blocks before approval, reads allowed, destructive always 1 approval (people too), money 2 approvers (always in production), on-doubt for machines only, `approval: 'never'` | pass |
+| Guard + approvals | `apps/api/src/guard.int.test.ts` (real Postgres): dry run changes nothing (no pending action either); same idempotency key returns the same request; the requester, a clerk, a user without 2FA, a session older than 10 min, and REST callers cannot decide; the DB trigger refuses self-approval even with code bypassed; approve runs once as the requester (invoice_void journal, audit, replay timeline, original key returns the result); reject; target changed → `STALE_STATE`, nothing runs; expired → cannot decide; reversal needs two different approvers then queues one Daraja call; clerks cannot request a reversal; unmatch reverses the allocation and reopens the invoice; write-off above the cap → `BLOCKED`, within → approval; daily budget → `BUDGET_EXCEEDED`; too many writes a minute → `RATE_LIMITED` | pass |
+| Reversal worker | `apps/worker/src/reversal.int.test.ts`: sent once with the documented fields; confirmed result → transaction `reversed` + reversal journal; refusal or a result for another receipt → `reversal_failed` exception, payment untouched; timeout and failed call → never retried, a person checks | pass |
+| Router enumeration | `contract.test.ts`: only procedures with agent meta become tools; `approvals.decide` and API-key management never do; names unique; money → 2 approvers, destructive never skips approval; tool list snapshot `__snapshots__/agent-tools.json` | pass |
+| Web, end to end | Running stack: the clerk requested **Void** on `UNIT-D9-OCT` → "Sent for approval"; the accountant signed in with password + TOTP code, saw the card (summary, requester, expiry, 0/1 approvals, reason, diff), clicked **Approve** → card under **Done** as `executed`, `UNIT-D9-OCT` is `void`, one `invoice_void` journal; `make replay ARGS="--org acme-rentals --since 60"` shows request `[require_approval] → pending`, `approvals.decide [approve]`, `expected.void [approved] → changed` | works |
+| Suite | `make test` 283 passed; lint + dependency check, typecheck, OpenAPI snapshot (reviewed: new procedures and error responses, plus reordering), verify-images, smoke, scan | green |
+
+### What exists
+
+- `@paysync/contract`: `agent()` meta initializer (`AgentMeta` as in §8.1), `approvalPolicyOf`; errors `APPROVAL_REQUIRED` (428, pending action id, summary, approvals needed, reasons, preview), `BLOCKED`, `BUDGET_EXCEEDED`, `STEP_UP_REQUIRED`, `RATE_LIMITED` (429). New procedures: `transactions.writeOffVariance`, `expected.void`, `matches.unmatch`, `reversals.request` (money, 2 approvers), `pendingActions.list/get` (agent-readable), `approvals.decide` (no agent meta).
+- `@paysync/guard`: the pure `decide()` and `DEFAULT_GUARD_POLICY` (write-off cap KES 500, write-off budget KES 2,000/day, 5 reversals/day, 60 writes/min, approvals expire after 72 h, step-up after 10 min).
+- `@paysync/audit`: `replay()` + `formatTimeline()`, exposed as `make replay`.
+- API, one concern per module: `orpc/guarding/` (the pipeline `runGuarded`, meta lookup, stored-input validation, error mapping, decision audit, rate limit), `orpc/actions/` (one file per approvable action + a registry keyed by procedure), `orpc/approvals/` (list/get, decide, step-up, record, execute), `orpc/guarded-procedures.ts` (handlers only).
+- DB (`20260928122155_guard.sql`, `20260929230046_reversal_exceptions.sql`): `agent.pending_action` (unique org + idempotency key), append-only `agent.approval` with trigger `agent_approval_not_requester` / `agent_approval_pending_only` and one approval per approver, append-only `core.variance_write_off` counted by the allocation-within-amount check, `core.match_unmatch_is_final`, `auth.two_factor`, `daraja_request` kind `reversal`, exception kind `reversal_failed`.
+- Worker: `execute_reversal` (maxAttempts 1), reversal result/timeout routes (`/hooks/result/reversal`, `/hooks/timeout/reversal`), `sweep_pending_actions` (hourly at :17) marks expired requests.
+- Web: Approvals tab (Waiting/Done/Rejected/Failed/Expired), pending-action card with diff, TOTP step at sign-in and as step-up inside the card, Security tab to enrol TOTP, Void / Write off / Reverse / Undo match requests with a reason, daily totals, organization picker.
+
+### Decisions and deviations
+
+- **Approvals are web-only and person-only.** `approvals.decide` rejects any surface but `web`; there is no approve tool (tested). Approvers need `approval.approve` (accountant, admin, owner), TOTP enabled and a session at most 10 minutes old; the requester can never approve (code + DB trigger).
+- **Step-up = session freshness.** Better Auth's `freshAge = 600`; a stale session gets `STEP_UP_REQUIRED` and the card asks to sign in again with password + code. Passkeys are not added yet (TOTP satisfies §6C.4's "passkey or TOTP").
+- **Approval runs the action once, in the approving transaction** (SERIALIZABLE): action + idempotency record under the original key + audit commit together. If the target changed, the transaction rolls back, a second transaction records `failed`, and the caller gets `STALE_STATE`; a fresh request is needed.
+- **Reversal**: sandbox only, never auto-executed. Approval writes the `daraja_request` intent and enqueues `execute_reversal` in the same transaction; the worker calls once (no retry); success is only a matching result (same receipt and amount). Anything else raises a high-priority `reversal_failed` exception. Production money movement stays disabled.
+- **Deviation:** guard policy lives in `packages/guard/src/policy.ts`, not `config/policy.ts`, so the publishable guard package owns its defaults; per-org overrides come with M6 when Jev thresholds join.
+- **Deviation:** the on-doubt check (§8.3 step 6) is wired only for `matches.confirm` (doubt: reference key differs). `expected.create/update` and `exceptions.resolve` carry `guarded` errors already and get their checks with the agent surfaces in M7. Jev (step 7) is M6.
+- Rate limit counts audit events per user per minute (Postgres, works across replicas) instead of the oRPC rate-limit helper.
+- Budgets count committed write-offs (KES per EAT day) and requested reversals per EAT day.
+
+### Daraja quirks
+
+- The Reversal request field is spelled `RecieverIdentifierType` in Safaricom's docs and sandbox; we send it that way.
+- Reversal results carry payer display names (`CreditPartyPublicName`, `DebitPartyPublicName`); they are sealed like other personal data before storage.
+
+### Dev notes
+
+- `make seed` enrols TOTP for the seeded approvers through Better Auth's API and prints their secrets (dev only). Clerks and viewers are not enrolled.
+
+### Owner requests (2026-09-30), not started
+
+- **Custom roles:** the organization's owner/admin defines roles and picks their permissions instead of the fixed five. Guardrails to keep: approving still needs 2FA + step-up and can never be the requester; agents and integrator keys never get approve; a money action still needs two distinct approvers; role changes are audited.
+- **UI overhaul:** audit the web app (impeccable, ui-ux pro max, anti-slop), drop noisy captions and text, new typography and visual style inspired by styles.refero.design.
+
+### Next step
+
+- M6 (Jev) waits for the owner's go-ahead; custom roles and the UI overhaul to be scheduled with the owner.
+
+---
+
 ## M4: Matching (deterministic) — done 2026-09-28
 
 ### Done-when evidence

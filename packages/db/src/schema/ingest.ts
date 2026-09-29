@@ -107,7 +107,7 @@ export const darajaToken = ingest.table('daraja_token', {
   updatedAt: updatedAt(),
 })
 
-export const DARAJA_REQUEST_KINDS = ['transaction_status', 'account_balance'] as const
+export const DARAJA_REQUEST_KINDS = ['transaction_status', 'account_balance', 'reversal'] as const
 export const DARAJA_REQUEST_STATUSES = ['initiated', 'accepted', 'completed', 'failed', 'timed_out'] as const
 
 /**

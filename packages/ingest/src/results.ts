@@ -4,13 +4,13 @@ import { sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { bodyHash, insertEvent, storeUnrouted, type IngestDeps, type IngestResult } from './ingest.js'
 
-export type ResultKind = 'transaction_status' | 'account_balance'
+export type ResultKind = 'transaction_status' | 'account_balance' | 'reversal'
 
 const Route = z.object({ daraja_request_id: z.string(), org_id: z.string(), shortcode_id: z.string(), kind: z.string() })
 
 const SOURCES = {
-  result: { transaction_status: 'transaction_status_result', account_balance: 'account_balance_result' },
-  timeout: { transaction_status: 'queue_timeout', account_balance: 'queue_timeout' },
+  result: { transaction_status: 'transaction_status_result', account_balance: 'account_balance_result', reversal: 'reversal_result' },
+  timeout: { transaction_status: 'queue_timeout', account_balance: 'queue_timeout', reversal: 'queue_timeout' },
 } as const
 
 /**
