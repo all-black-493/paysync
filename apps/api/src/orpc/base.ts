@@ -39,6 +39,8 @@ export interface Caller {
   readonly role: string
   /** For signed-in users: what approvals check (§6C.4). */
   readonly session: { readonly id: string; readonly createdAt: Date; readonly twoFactorEnabled: boolean } | null
+  /** The agent session acting for this person (AI SDK, MCP); null for direct calls. Stored on every audit event. */
+  readonly agentSessionId: string | null
 }
 
 export const os = implement(contract).$context<InitialContext>()
@@ -70,6 +72,7 @@ async function apiKeyCaller(context: InitialContext, key: string): Promise<Resol
       orgId: result.key.referenceId,
       role: `api_key:${scope}`,
       session: null,
+      agentSessionId: null,
     },
     rules: INTEGRATOR_RULES[scope],
   }
@@ -106,6 +109,7 @@ async function sessionCaller(context: InitialContext): Promise<Resolved> {
         createdAt: new Date(session.session.createdAt),
         twoFactorEnabled: session.user.twoFactorEnabled === true,
       },
+      agentSessionId: context.agent?.sessionId ?? null,
     },
     rules: rulesForMember(member.role, await customRoles(context.db, orgId, member.role)),
   }

@@ -2,7 +2,9 @@ import type { Tx } from '@paysync/db'
 import type { GuardPolicy } from '@paysync/guard'
 import type { Actor, BudgetUse, GuardedAction, GuardedInput } from '../guarding/index.js'
 import { confirmMatch } from './confirm-match.js'
+import { createExpected, updateExpected } from './expected-payments.js'
 import { requestReversal } from './request-reversal.js'
+import { resolveException } from './resolve-exception.js'
 import { unmatch } from './unmatch.js'
 import { voidExpected } from './void-expected.js'
 import { writeOffVariance } from './write-off-variance.js'
@@ -29,4 +31,8 @@ export const APPROVABLE: Readonly<Record<string, Executable>> = {
   [voidExpected.procedure]: executable(voidExpected),
   [writeOffVariance.procedure]: executable(writeOffVariance),
   [requestReversal.procedure]: executable(requestReversal),
+  // Writes that wait only when the guard doubts an agent's call.
+  [createExpected.procedure]: executable(createExpected),
+  [updateExpected.procedure]: executable(updateExpected),
+  [resolveException.procedure]: executable(resolveException),
 }

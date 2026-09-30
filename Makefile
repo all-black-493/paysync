@@ -186,6 +186,10 @@ lock: ## Refresh pnpm-lock.yaml inside a container (after editing package.json)
 replay: bootstrap ## Audit trail, oldest first: make replay ARGS="--org acme-rentals --user clerk@acme.test --since 60"
 	$(COMPOSE) run --rm --no-deps api node dist/audit-cli.js replay $(ARGS)
 
+.PHONY: agent-demo
+agent-demo: bootstrap ## Scripted AI SDK agent session in a fresh demo organization, then its audit replay (dev only)
+	$(COMPOSE) run --rm --no-deps api node dist/agent-demo/main.js
+
 .PHONY: simulate
 simulate: bootstrap ## Replay every Daraja callback fixture (duplicated, shuffled) against the running api
 	$(COMPOSE) --profile tools run --rm daraja replay

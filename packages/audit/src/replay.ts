@@ -49,6 +49,17 @@ export async function replay(db: Db, orgId: string, filter: ReplayFilter): Promi
   }))
 }
 
+/** Jev's verdict on an agent action, when it was asked (§8.5). */
+function jevNote(details: unknown): string {
+  if (typeof details !== 'object' || details === null || !('jev' in details)) return ''
+  const jev: unknown = details.jev
+  if (typeof jev !== 'object' || jev === null) return ''
+  if ('failure' in jev) return ` (Jev: no answer, ${String(jev.failure)})`
+  if (!('intent' in jev) || typeof jev.intent !== 'object' || jev.intent === null || !('choice' in jev.intent)) return ''
+  const confidence = 'confidence' in jev.intent && typeof jev.intent.confidence === 'number' ? ` ${String(Math.round(jev.intent.confidence * 100))}%` : ''
+  return ` (Jev: ${String(jev.intent.choice).replaceAll('_', ' ')}${confidence})`
+}
+
 /** One readable line per event, for demos and incident review. */
 export function formatTimeline(entries: readonly TimelineEntry[]): string {
   return entries
@@ -57,7 +68,7 @@ export function formatTimeline(entries: readonly TimelineEntry[]): string {
       const reasons = typeof e.details === 'object' && e.details !== null && 'reasons' in e.details && Array.isArray(e.details.reasons) && e.details.reasons.length > 0
         ? ` — ${e.details.reasons.join('; ')}`
         : ''
-      return `${e.at.toISOString()}  ${e.surface.padEnd(6)} ${(e.userId ?? '-').padEnd(34)} ${e.action}${decision} → ${e.outcome}${reasons}`
+      return `${e.at.toISOString()}  ${e.surface.padEnd(6)} ${(e.userId ?? '-').padEnd(34)} ${e.action}${decision} → ${e.outcome}${reasons}${jevNote(e.details)}`
     })
     .join('\n')
 }

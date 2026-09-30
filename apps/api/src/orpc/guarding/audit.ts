@@ -20,7 +20,7 @@ export async function auditDecision(
     orgId: context.caller.orgId,
     surface: context.surface,
     userId: context.caller.actorId,
-    agentSessionId: context.agent?.sessionId ?? null,
+    agentSessionId: context.caller.agentSessionId,
     action,
     input: redact(input),
     decision,

@@ -6,7 +6,7 @@ import type { Caller, Surface } from '../base.js'
 
 /** Domain failures of a guarded action, mapped to the procedure's typed errors. */
 export class ActionError extends Error {
-  readonly code: 'NOT_FOUND' | 'STALE_STATE' | 'INVALID_STATE' | 'ALLOCATION_REJECTED'
+  readonly code: 'NOT_FOUND' | 'STALE_STATE' | 'INVALID_STATE' | 'ALLOCATION_REJECTED' | 'DUPLICATE_REFERENCE'
   readonly data: Record<string, unknown>
 
   constructor(code: ActionError['code'], message: string, data: Record<string, unknown> = {}) {
@@ -72,8 +72,9 @@ export interface GuardErrors {
   RATE_LIMITED(): Error
   NOT_FOUND(): Error
   STALE_STATE?(options: { data: { currentVersion: number } }): Error
-  INVALID_STATE?(options: { data: { status: string } }): Error
+  INVALID_STATE?(options: { message?: string; data: { status: string } }): Error
   ALLOCATION_REJECTED?(options: { data: { expectedPaymentId?: string; unallocated?: string; due?: string } }): Error
+  DUPLICATE_REFERENCE?(options: { data: { existingId: string } }): Error
 }
 
 export interface GuardContext {
@@ -82,7 +83,7 @@ export interface GuardContext {
   readonly surface: Surface
   readonly policy?: GuardPolicy
   readonly jev: Jev
-  /** Set by the agent surfaces (M7/M8): the session and what the person asked their agent to do. */
+  /** Set by the agent surfaces: what the person asked their agent to do, for Jev. */
   readonly agent?: AgentSession
 }
 

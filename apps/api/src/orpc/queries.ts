@@ -2,7 +2,7 @@ import { schema, type Tx } from '@paysync/db'
 import { and, desc, eq, sql, type SQL } from 'drizzle-orm'
 import { toTransaction } from './mappers.js'
 
-const { allocation, match, mpesaTransaction, shortcode, varianceWriteOff } = schema
+const { allocation, expectedPayment, match, mpesaTransaction, shortcode, varianceWriteOff } = schema
 
 /** Allocated totals per transaction, counting active matches only. */
 export function allocatedByTransaction(tx: Tx) {
@@ -62,4 +62,17 @@ export async function listTransactions(tx: Tx, where: SQL | undefined, limit: nu
     .orderBy(desc(mpesaTransaction.id))
     .limit(limit)
   return rows.map((r) => toTransaction(r.t, r.s, toBigInt(r.allocated), toBigInt(r.writtenOff)))
+}
+
+/** Expected payments with what has been paid on each, newest first. */
+export async function selectExpected(tx: Tx, where: SQL | undefined, limit: number) {
+  const paid = paidByExpectedPayment(tx)
+  const rows = await tx
+    .select({ e: expectedPayment, paid: paid.total })
+    .from(expectedPayment)
+    .leftJoin(paid, eq(paid.expectedPaymentId, expectedPayment.id))
+    .where(where)
+    .orderBy(desc(expectedPayment.id))
+    .limit(limit)
+  return rows.map((r) => ({ row: r.e, paid: toBigInt(r.paid) }))
 }

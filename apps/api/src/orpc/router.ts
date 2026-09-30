@@ -1,15 +1,22 @@
-import { ExpectedPayment, ReconException, fromMoney } from '@paysync/contract'
-import { CONSTRAINTS, SQLSTATE, pgConstraint, pgErrorCode, postInvoice, schema, withOrg, type Tx } from '@paysync/db'
-import { and, asc, count, desc, eq, gt, gte, inArray, lt, ne, or, sql, type SQL } from 'drizzle-orm'
+import { ReconException } from '@paysync/contract'
+import { schema, withOrg } from '@paysync/db'
+import { and, asc, count, desc, eq, gt, gte, inArray, lt, or, sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 import { authed, os } from './base.js'
 import { iso, normalizeReference, pageOf, toException, toExpectedPayment } from './mappers.js'
 import { apiKeyProcedures } from './api-keys.js'
 import { approvalProcedures, pendingActionProcedures } from './approvals/index.js'
-import { expectedVoid, reversalsRequest, transactionsWriteOffVariance } from './guarded-procedures.js'
-import { exceptionsResolve, matchingProcedures } from './matching.js'
+import {
+  exceptionsResolve,
+  expectedCreate,
+  expectedUpdate,
+  expectedVoid,
+  reversalsRequest,
+  transactionsWriteOffVariance,
+} from './guarded-procedures.js'
+import { matchingProcedures } from './matching.js'
 import { mutate } from './mutate.js'
-import { allocatedByTransaction, listTransactions, paidByExpectedPayment, toBigInt } from './queries.js'
+import { allocatedByTransaction, listTransactions, selectExpected, toBigInt } from './queries.js'
 
 const { allocation, exception, expectedPayment, match, mpesaTransaction, organization } = schema
 
@@ -58,18 +65,6 @@ const transactionsGet = authed.transactions.get.handler(async ({ context, input,
   }),
 )
 
-async function selectExpected(tx: Tx, where: SQL | undefined, limit: number) {
-  const paid = paidByExpectedPayment(tx)
-  const rows = await tx
-    .select({ e: expectedPayment, paid: paid.total })
-    .from(expectedPayment)
-    .leftJoin(paid, eq(paid.expectedPaymentId, expectedPayment.id))
-    .where(where)
-    .orderBy(desc(expectedPayment.id))
-    .limit(limit)
-  return rows.map((r) => ({ row: r.e, paid: toBigInt(r.paid) }))
-}
-
 const expectedList = authed.expected.list.handler(async ({ context, input }) =>
   withOrg(context.db, context.caller.orgId, async (tx) => {
     const where = and(
@@ -97,136 +92,6 @@ const expectedGet = authed.expected.get.handler(async ({ context, input, errors 
     return toExpectedPayment(found.row, found.paid)
   }),
 )
-
-async function findByReference(tx: Tx, normalized: string, exceptId?: string) {
-  const [existing] = await tx
-    .select({ id: expectedPayment.id })
-    .from(expectedPayment)
-    .where(
-      and(eq(expectedPayment.referenceNormalized, normalized), exceptId ? ne(expectedPayment.id, exceptId) : undefined),
-    )
-  return existing
-}
-
-function isDuplicateReference(error: unknown): boolean {
-  return pgErrorCode(error) === SQLSTATE.uniqueViolation && pgConstraint(error) === CONSTRAINTS.expectedPaymentReference
-}
-
-const expectedCreate = authed.expected.create.handler(async ({ context, input, errors }) => {
-  const normalized = normalizeReference(input.reference)
-  try {
-    return await mutate({
-      db: context.db,
-      caller: context.caller,
-      surface: context.surface,
-      action: 'expected.create',
-      input,
-      output: previewOf(ExpectedPayment),
-      run: async (tx) => {
-        const existing = await findByReference(tx, normalized)
-        if (existing) throw errors.DUPLICATE_REFERENCE({ data: { existingId: existing.id } })
-        const [row] = await tx
-          .insert(expectedPayment)
-          .values({
-            orgId: context.caller.orgId,
-            reference: input.reference,
-            referenceNormalized: normalized,
-            amountDue: fromMoney(input.amountDue),
-            dueDate: input.dueDate,
-            description: input.description,
-            payerLabel: input.payerLabel,
-            createdBy: context.caller.actorId,
-          })
-          .returning()
-        if (!row) throw new Error('insert returned no row')
-        await postInvoice(tx, {
-          orgId: row.orgId,
-          key: `invoice:${row.id}`,
-          reference: row.reference,
-          delta: row.amountDue,
-          createdBy: context.caller.actorId,
-          reason: 'invoice',
-        })
-        return { result: toExpectedPayment(row, 0n), changed: true }
-      },
-    })
-  } catch (error) {
-    if (isDuplicateReference(error)) {
-      const existing = await withOrg(context.db, context.caller.orgId, (tx) => findByReference(tx, normalized))
-      if (existing) throw errors.DUPLICATE_REFERENCE({ data: { existingId: existing.id } })
-    }
-    throw error
-  }
-})
-
-const expectedUpdate = authed.expected.update.handler(async ({ context, input, errors }) => {
-  try {
-    return await mutate({
-      db: context.db,
-      caller: context.caller,
-      surface: context.surface,
-      action: 'expected.update',
-      input,
-      output: previewOf(ExpectedPayment),
-      run: async (tx) => {
-        // Lock first: drizzle schema-qualifies FOR UPDATE OF, which Postgres rejects on a join.
-        await tx.select({ id: expectedPayment.id }).from(expectedPayment).where(eq(expectedPayment.id, input.id)).for('update')
-        const [found] = await selectExpected(tx, eq(expectedPayment.id, input.id), 1)
-        if (!found) throw errors.NOT_FOUND()
-        const { row, paid } = found
-        if (row.version !== input.version) throw errors.STALE_STATE({ data: { currentVersion: row.version } })
-        if (row.status !== 'open' && row.status !== 'partially_paid') {
-          throw errors.INVALID_STATE({ data: { status: row.status } })
-        }
-
-        const changes: Partial<typeof expectedPayment.$inferInsert> = {}
-        if (input.reference !== undefined && input.reference !== row.reference) {
-          const normalized = normalizeReference(input.reference)
-          const existing = await findByReference(tx, normalized, row.id)
-          if (existing) throw errors.DUPLICATE_REFERENCE({ data: { existingId: existing.id } })
-          changes.reference = input.reference
-          changes.referenceNormalized = normalized
-        }
-        if (input.amountDue !== undefined) {
-          const amountDue = fromMoney(input.amountDue)
-          if (amountDue < paid) {
-            throw errors.INVALID_STATE({
-              message: 'The amount due cannot be lower than what has already been paid.',
-              data: { status: row.status },
-            })
-          }
-          if (amountDue !== row.amountDue) changes.amountDue = amountDue
-        }
-        if (input.dueDate !== undefined && input.dueDate !== row.dueDate) changes.dueDate = input.dueDate
-        if (input.description !== undefined && input.description !== row.description) {
-          changes.description = input.description
-        }
-        if (input.payerLabel !== undefined && input.payerLabel !== row.payerLabel) changes.payerLabel = input.payerLabel
-
-        if (Object.keys(changes).length === 0) return { result: toExpectedPayment(row, paid), changed: false }
-        if (changes.amountDue !== undefined && paid > 0n) changes.status = changes.amountDue === paid ? 'paid' : 'partially_paid'
-        const [updated] = await tx
-          .update(expectedPayment)
-          .set({ ...changes, version: row.version + 1 })
-          .where(eq(expectedPayment.id, row.id))
-          .returning()
-        if (!updated) throw new Error('update returned no row')
-        await postInvoice(tx, {
-          orgId: updated.orgId,
-          key: `invoice:${updated.id}:v${updated.version}`,
-          reference: updated.reference,
-          delta: updated.amountDue - row.amountDue,
-          createdBy: context.caller.actorId,
-          reason: 'adjustment',
-        })
-        return { result: toExpectedPayment(updated, paid), changed: true }
-      },
-    })
-  } catch (error) {
-    if (isDuplicateReference(error)) throw errors.DUPLICATE_REFERENCE({ data: { existingId: input.id } })
-    throw error
-  }
-})
 
 const exceptionsList = authed.exceptions.list.handler(async ({ context, input }) =>
   withOrg(context.db, context.caller.orgId, async (tx) => {

@@ -1,4 +1,4 @@
-import { agentMetaOf, contract, type AgentMeta } from '@paysync/contract'
+import { agentMetaOf, contract, listProcedures, type AgentMeta } from '@paysync/contract'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { PERMISSIONS, permissionFor } from './orpc/permissions.js'
@@ -28,21 +28,7 @@ describe('public contract', () => {
   })
 })
 
-interface Procedure {
-  readonly path: string
-  readonly meta: Readonly<Record<PropertyKey, unknown>>
-}
-
-const ProcedureShape = z.object({ '~orpc': z.object({ meta: z.record(z.string(), z.unknown()) }) })
-
-function procedures(node: unknown, prefix: string[] = []): Procedure[] {
-  const parsed = ProcedureShape.safeParse(node)
-  if (parsed.success) return [{ path: prefix.join('.'), meta: parsed.data['~orpc'].meta }]
-  if (typeof node !== 'object' || node === null) return []
-  return Object.entries(node).flatMap(([key, child]) => procedures(child, [...prefix, key]))
-}
-
-const all = procedures(contract)
+const all = listProcedures(contract)
 const tools = all.flatMap((p) => {
   const meta = agentMetaOf(p.meta)
   return meta ? [{ path: p.path, meta }] : []

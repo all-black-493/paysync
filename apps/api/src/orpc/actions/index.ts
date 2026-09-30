@@ -1,6 +1,8 @@
 export { confirmMatch } from './confirm-match.js'
+export { createExpected, findByReference, isDuplicateReference, updateExpected } from './expected-payments.js'
 export { APPROVABLE, type Executable } from './registry.js'
 export { requestReversal } from './request-reversal.js'
+export { resolveException } from './resolve-exception.js'
 export { unmatch } from './unmatch.js'
 export { voidExpected } from './void-expected.js'
 export { writeOffVariance } from './write-off-variance.js'

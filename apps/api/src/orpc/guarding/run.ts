@@ -41,7 +41,6 @@ export async function runGuarded<I extends GuardedInput, R>(
       decision: dryRun ? 'dry_run' : decision.kind,
       reasons: decision.reasons,
       ...(jev ? { evidence: { jev } } : {}),
-      ...(context.agent?.sessionId ? { agentSessionId: context.agent.sessionId } : {}),
       run: (tx) => action.run(tx, input, actorOf(caller)),
     }).catch((error: unknown) => mapActionError(errors, error))
 

@@ -11,7 +11,7 @@ export function mapActionError(errors: GuardErrors, error: unknown): never {
       if (errors.STALE_STATE) throw errors.STALE_STATE({ data: { currentVersion: Number(error.data.currentVersion) } })
       break
     case 'INVALID_STATE':
-      if (errors.INVALID_STATE) throw errors.INVALID_STATE({ data: { status: String(error.data.status) } })
+      if (errors.INVALID_STATE) throw errors.INVALID_STATE({ message: error.message, data: { status: String(error.data.status) } })
       break
     case 'ALLOCATION_REJECTED':
       if (errors.ALLOCATION_REJECTED) {
@@ -24,6 +24,9 @@ export function mapActionError(errors: GuardErrors, error: unknown): never {
           },
         })
       }
+      break
+    case 'DUPLICATE_REFERENCE':
+      if (errors.DUPLICATE_REFERENCE) throw errors.DUPLICATE_REFERENCE({ data: { existingId: String(error.data.existingId) } })
       break
   }
   throw errors.BLOCKED({ data: { reason: error.message } })

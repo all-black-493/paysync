@@ -10,6 +10,7 @@
   "dependencies": {
     "@better-auth/api-key": "1.7.6",
     "@better-auth/drizzle-adapter": "1.7.6",
+    "@orpc/ai-sdk": "2.0.0-beta.40",
     "@orpc/contract": "2.0.0-beta.40",
     "@orpc/openapi": "2.0.0-beta.40",
     "@orpc/server": "2.0.0-beta.40",
@@ -24,6 +25,7 @@
     "@paysync/ingest": "workspace:*",
     "@paysync/matching": "workspace:*",
     "@paysync/platform": "workspace:*",
+    "ai": "7.0.123",
     "better-auth": "1.7.6",
     "drizzle-orm": "0.45.3",
     "permix": "4.3.0",

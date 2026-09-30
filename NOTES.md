@@ -5,6 +5,44 @@ Newest milestone first.
 
 ---
 
+## M7: AI SDK surface — done 2026-09-30
+
+### Done-when evidence
+
+"The demo runs end-to-end and `replay()` shows every decision."
+
+| Check | How | Result |
+|---|---|---|
+| Demo, end to end | `make agent-demo` on the dev stack: a fresh demo organization with a 5-exception backlog; a scripted agent working for an accountant lists exceptions, gets suggestions, confirms the 3 whose reference fits, notes the one that does not, asks to write off a KES 50 leftover and to reverse a double payment; the person confirms both in chat; both wait in the web app's approval queue (1 and 2 approvers); open exceptions 5 → 2 | works |
+| Replay | the same run prints `replay(sessionId)`: 3 × `matches.confirm [allow]`, `exceptions.annotate [allow]`, `transactions.writeOffVariance [require_approval] → pending`, `reversals.request [require_approval] → pending`, each on the `ai-sdk` surface with the person's id and Jev's verdict | shows every decision |
+| Demo test | `apps/api/src/agent-demo.int.test.ts` asserts the above against a throwaway database | pass |
+| Tool surface | `apps/api/src/agent-tools.int.test.ts`: only agent-meta procedures, stable names, agent-written descriptions; no approve or key tools; chat confirmation on exactly the destructive/money tools; tools act as the signed-in person (a clerk's agent is `FORBIDDEN` a reversal); a guard block comes back as a `blocked` result and writes nothing; no session → `UNAUTHORIZED` | pass |
+| Suite | `make test` 338 passed (3 live Jev tests skipped); lint, typecheck, verify-images (23), scan | green |
+
+### What exists
+
+- `apps/api/src/agent/tools.ts`: `agentTools({ services, headers, sessionId, userRequest })` builds one AI SDK tool per procedure with agent metadata (`@orpc/ai-sdk` `createToolFactory`, one factory per procedure so it carries its contract path). Calls run in-process through the whole middleware stack as the person (their session cookie) on the `ai-sdk` surface, so permissions, the guard, Jev, budgets, approvals and audit apply exactly as they will for MCP. Returns `toolApproval` (`'user-approval'` for destructive and money tools) for AI SDK human-in-the-loop.
+- `apps/api/src/agent/outcome.ts`: guard and API refusals (`APPROVAL_REQUIRED`, `BLOCKED`, `FORBIDDEN`, `STALE_STATE`, …) become plain tool results with what to do next; real failures stay errors.
+- `Caller.agentSessionId` (from the agent surface) is stored on every audit event, so `replay(sessionId)` finds the whole session.
+- `expected.create`, `expected.update`, `exceptions.resolve` now run through the guard pipeline as guarded actions (and can wait for approval when Jev doubts an agent's call); `@paysync/contract` `listProcedures`/`agentProcedures` shared by the tool builder and the router-enumeration tests.
+- `apps/api/src/agent-demo/` (`make agent-demo`): `setup.ts` (fresh demo org, users, expected payments, verified payments, exceptions as the matching job would raise them), `policy.ts` (scripted bookkeeping policy over tool results), `model.ts` (AI SDK `MockLanguageModelV4` driven by the policy), `run.ts` (sign in, tools, `generateText` loop with chat confirmations, pending actions, replay), `main.ts` (CLI).
+- Replay lines show Jev's verdict when it was asked.
+
+### Decisions and deviations
+
+- **No LLM needed for the demo.** The model is scripted through the AI SDK's own mock model, so the real tool loop, schemas and approvals run without credits; Jev is scripted too unless `JEV_ENABLED=true`. The output says which.
+- **Two human-in-the-loop layers:** the person confirms destructive/money tools in chat (AI SDK v7 `toolApproval`; tool-level `needsApproval` is deprecated in v7), and the request still waits for another person in the web app. AGENTS §8.4's "tools without execute" is the older v5 pattern; the v7 equivalent is used.
+- **Deviation:** the agent demo lives in `apps/api/src/agent-demo/` (not `apps/agent-demo/`): it needs the router in-process and runs from the api image.
+- **Not built yet: the in-app chat** (streaming HTTP route and web UI). It needs an LLM provider package (not in §6, e.g. `@ai-sdk/anthropic`) and a key: owner decision. The tool set, session context and approval config are ready for it.
+- **Dependencies added** (both listed in §6, pinned): `@orpc/ai-sdk` 2.0.0-beta.40, `ai` 7.0.123; transitive: `@ai-sdk/provider` 4.0.20, `@ai-sdk/provider-utils` 5.0.52, `@ai-sdk/gateway` 4.0.101, `@vercel/oidc`, `@workflow/serde`, `eventsource-parser`, `json-schema`, `undici`.
+- **Found while testing:** a procedure called as a tool has no router path, and the permission lookup (keyed by path) failed closed; each tool now carries its path.
+
+### Next step
+
+- M8 (MCP surface) waits for the owner's go-ahead. Owner decision pending: which LLM provider for the in-app chat.
+
+---
+
 ## M6: Jev — built 2026-09-30; live smoke test waits for a TypeSafe key
 
 ### Done-when evidence

@@ -1,17 +1,12 @@
-import { ReconException } from '@paysync/contract'
 import { schema, withOrg, type Tx } from '@paysync/db'
 import { loadCandidates, readTransaction, suggest } from '@paysync/matching'
-import { and, eq, inArray, sql } from 'drizzle-orm'
-import { z } from 'zod'
+import { eq, inArray } from 'drizzle-orm'
 import { authed } from './base.js'
 import { matchesConfirm, matchesUnmatch } from './guarded-procedures.js'
-import { toException, toExpectedPayment, toTransaction } from './mappers.js'
-import { mutate } from './mutate.js'
+import { toExpectedPayment, toTransaction } from './mappers.js'
 import { paidByExpectedPayment, toBigInt } from './queries.js'
 
-const { exception, expectedPayment, mpesaTransaction, shortcode } = schema
-
-const previewOf = <T extends z.ZodType>(item: T) => z.object({ dryRun: z.boolean(), changed: z.boolean(), result: item })
+const { expectedPayment, mpesaTransaction, shortcode } = schema
 
 async function loadTransaction(tx: Tx, transactionId: string) {
   const [row] = await tx
@@ -51,29 +46,4 @@ const matchesSuggest = authed.matches.suggest.handler(async ({ context, input, e
   }),
 )
 
-const exceptionsResolve = authed.exceptions.resolve.handler(async ({ context, input, errors }) =>
-  mutate({
-    db: context.db,
-    caller: context.caller,
-    surface: context.surface,
-    action: 'exceptions.resolve',
-    input,
-    output: previewOf(ReconException),
-    run: async (tx) => {
-      const [row] = await tx.select().from(exception).where(eq(exception.id, input.id)).for('update')
-      if (!row) throw errors.NOT_FOUND()
-      if (row.version !== input.version) throw errors.STALE_STATE({ data: { currentVersion: row.version } })
-      if (row.status !== 'open') throw errors.INVALID_STATE({ data: { status: row.status } })
-      const [updated] = await tx
-        .update(exception)
-        .set({ status: input.resolution, note: input.note, resolvedAt: sql`now()`, version: row.version + 1 })
-        .where(and(eq(exception.id, row.id), eq(exception.status, 'open')))
-        .returning()
-      if (!updated) throw new Error('update returned no row')
-      return { changed: true, result: toException(updated) }
-    },
-  }),
-)
-
 export const matchingProcedures = { suggest: matchesSuggest, confirm: matchesConfirm, unmatch: matchesUnmatch }
-export { exceptionsResolve }
