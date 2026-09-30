@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { formatAmount } from '../../lib/format'
 import { EXPECTED_STATUS } from '../../lib/labels'
 import { client, orpc } from '../../lib/orpc'
+import { RecordLink } from '../detail/record-link'
 import { RequestAction } from '../requests/request-action'
 import { Empty, LoadError, Loading } from '../ui/empty'
 import { Status } from '../ui/status'
@@ -41,9 +42,11 @@ export function ExpectedPanel({ canWrite, canVoid }: { canWrite: boolean; canVoi
           </thead>
           <tbody>
             {list.data.items.map((e) => (
-              <tr key={e.id}>
+              <tr key={e.id} className="clickable">
                 <td className="mono" data-label="Reference">
-                  {e.reference}
+                  <RecordLink kind="expected" id={e.id} stretch>
+                    {e.reference}
+                  </RecordLink>
                 </td>
                 <td className="nowrap" data-label="Due">
                   {e.dueDate ?? '—'}

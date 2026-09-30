@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { formatAmount } from '../../lib/format'
 import { TRANSACTION_STATUS } from '../../lib/labels'
 import { orpc } from '../../lib/orpc'
+import { RecordLink } from '../detail/record-link'
 import { Empty, LoadError, Loading } from '../ui/empty'
 import { Status } from '../ui/status'
 import { Time } from '../ui/time'
@@ -49,9 +50,11 @@ export function TransactionsPanel({ can }: { can: TransactionPermissions }) {
       </thead>
       <tbody>
         {list.data.items.map((t) => (
-          <tr key={t.id}>
+          <tr key={t.id} className="clickable">
             <td className="mono" data-label="Receipt">
-              {t.receiptNumber}
+              <RecordLink kind="transaction" id={t.id} stretch>
+                {t.receiptNumber}
+              </RecordLink>
             </td>
             <td className="nowrap" data-label="Received">
               <Time iso={t.transactedAt} style="short" />

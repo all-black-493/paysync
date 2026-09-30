@@ -5,6 +5,13 @@ Newest milestone first.
 
 ---
 
+## Web: KICC entry photo and clickable records — 2026-09-30
+
+- Sign-in, invitation and organization-picker screens show the owner's KICC photograph under the navy veil. Source: owner-supplied `apps/web/src/public/image.png` (3648×5472, 36 MB; git- and docker-ignored). Shipped as WebP encoded with ffmpeg: `apps/web/public/images/kicc-800.webp` (97 KB) and `kicc-1400.webp` (263 KB), chosen with `srcset`.
+- Every record row opens a detail panel (native `<dialog>`, focus-trapped, Esc and backdrop close): exception, transaction, expected payment, approval request. The panel lives in the URL (`?open=kind:id`), related records link to each other, and each panel carries the record's actions. No contract change: it uses the existing `get` procedures and `matches.list` filters. Related exceptions are not listed on a payment yet because `exceptions.list` has no `transactionId` filter (a contract change to ask for later).
+
+---
+
 ## Web redesign (Baselayer) — 2026-09-30
 
 Owner asked for a UI audit before M6, then chose Baselayer (styles.refero.design style 0c55e725) as the style.

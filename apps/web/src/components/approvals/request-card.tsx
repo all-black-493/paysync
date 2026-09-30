@@ -8,6 +8,7 @@ import { newIdempotencyKey } from '../../lib/format'
 import { flaggedReasons, PROCEDURES, REQUEST_STATUS } from '../../lib/labels'
 import { orpc } from '../../lib/orpc'
 import { useRefreshRecords } from '../../lib/refresh'
+import { RecordLink } from '../detail/record-link'
 import { FormMessage, type Message } from '../ui/form-message'
 import { Status } from '../ui/status'
 import { Time } from '../ui/time'
@@ -23,6 +24,15 @@ export interface Viewer {
 type Decision = 'approve' | 'reject'
 
 export function RequestCard({ action, viewer }: { action: PendingActionOutput; viewer: Viewer }) {
+  return (
+    <li className="request clickable" data-money={action.money}>
+      <RequestBody action={action} viewer={viewer} linked />
+    </li>
+  )
+}
+
+/** Both panes of a request: what was asked and by whom, then what it changes and the decision. */
+export function RequestBody({ action, viewer, linked = false }: { action: PendingActionOutput; viewer: Viewer; linked?: boolean }) {
   const refresh = useRefreshRecords()
   const [message, setMessage] = useState<Message | null>(null)
   const [stepUpFor, setStepUpFor] = useState<Decision | null>(null)
@@ -61,7 +71,7 @@ export function RequestCard({ action, viewer }: { action: PendingActionOutput; v
   }
 
   return (
-    <li className="request" data-money={action.money}>
+    <>
       <div className="request-main">
         <div className="request-line">
           <Status status={REQUEST_STATUS[action.status]} />
@@ -71,7 +81,13 @@ export function RequestCard({ action, viewer }: { action: PendingActionOutput; v
             {approvedCount} of {action.approvalsRequired} {action.approvalsRequired === 1 ? 'approval' : 'approvals'}
           </span>
         </div>
-        <p className="request-summary">{action.summary}</p>
+        {linked ? (
+          <RecordLink kind="request" id={action.id} stretch className="request-summary">
+            {action.summary}
+          </RecordLink>
+        ) : (
+          <p className="request-summary">{action.summary}</p>
+        )}
         <p className="record-meta">
           {action.requestedBy.name ?? 'Someone'} asked <Time iso={action.createdAt} />
           {pending ? (
@@ -128,6 +144,6 @@ export function RequestCard({ action, viewer }: { action: PendingActionOutput; v
         ) : null}
         <FormMessage message={message} />
       </div>
-    </li>
+    </>
   )
 }

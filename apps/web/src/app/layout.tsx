@@ -6,6 +6,7 @@ import '../styles/controls.css'
 import '../styles/frame.css'
 import '../styles/ledger.css'
 import '../styles/approvals.css'
+import '../styles/detail.css'
 import { era, season, uncut } from './fonts'
 import { Providers } from './providers'
 

@@ -38,3 +38,6 @@ skills-lock.json
 
 # Impeccable review captures (regenerated on each design pass)
 apps/web/.impeccable/review/
+
+# Original photos stay local; the app ships the encoded copies in apps/web/public/images
+apps/web/src/public/

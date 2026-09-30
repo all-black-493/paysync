@@ -31,3 +31,6 @@ data
 skills
 skills-lock.json
 .github
+
+# Original photos (only the encoded copies in apps/web/public ship)
+apps/web/src/public

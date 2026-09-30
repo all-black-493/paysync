@@ -38,6 +38,53 @@ typography:
     fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.5
+  display:
+    fontFamily: "Source Serif 4, Georgia, serif"
+    fontSize: "56px"
+    fontWeight: 515
+    lineHeight: 1.04
+    letterSpacing: "-0.02em"
+  display-sm:
+    fontFamily: "Source Serif 4, Georgia, serif"
+    fontSize: "32px"
+    fontWeight: 515
+    lineHeight: 1.04
+  record-heading:
+    fontFamily: "Uncut Sans, Segoe UI, sans-serif"
+    fontSize: "28px"
+    fontWeight: 400
+    lineHeight: 1.1
+  record-summary:
+    fontFamily: "Uncut Sans, Segoe UI, sans-serif"
+    fontSize: "20px"
+    fontWeight: 400
+    lineHeight: 1.35
+  request-summary:
+    fontFamily: "Uncut Sans, Segoe UI, sans-serif"
+    fontSize: "18px"
+    fontWeight: 400
+    lineHeight: 1.4
+  record-title:
+    fontFamily: "Uncut Sans, Segoe UI, sans-serif"
+    fontSize: "17px"
+    fontWeight: 400
+    lineHeight: 1.4
+  body-sm:
+    fontFamily: "Uncut Sans, Segoe UI, sans-serif"
+    fontSize: "15px"
+    fontWeight: 400
+    lineHeight: 1.5
+  meta:
+    fontFamily: "Uncut Sans, Segoe UI, sans-serif"
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: 1.5
+  micro:
+    fontFamily: "Geist Mono, ui-monospace, monospace"
+    fontSize: "11px"
+    fontWeight: 500
+    lineHeight: 1.15
+    letterSpacing: "0.02em"
   label:
     fontFamily: "Geist Mono, ui-monospace, monospace"
     fontSize: "12px"
@@ -52,6 +99,7 @@ typography:
     letterSpacing: "0.02em"
 rounded:
   none: "0px"
+  chip: "2px"
   control: "4px"
 spacing:
   xs: "4px"
@@ -171,6 +219,12 @@ Mono uppercase label above a 40px (44px on phones) input with a Steel border and
 
 ### Navigation
 The masthead holds the wordmark, "/ Organization" as the page's h1, and an account menu (name, role, switch organization, sign out). Below the field, a sticky paper tab rail: mono uppercase tabs, Registry Blue 2px underline on the current one, blue count chips for open exceptions and waiting approvals. Proper `tablist`/`tab`/`tabpanel` roles with arrow-key movement.
+
+### Entry field
+Sign-in, invitations and the organization picker put the owner's KICC photograph (Nairobi) under the navy veil: the photo at full bleed, then a navy-to-blue gradient at 90% to 72% with the rule grid, then the wordmark and "Every shilling accounted for." in white. Files: `public/images/kicc-800.webp` and `kicc-1400.webp`, encoded from the owner-supplied original.
+
+### Detail panel
+Any record row (exception, transaction, expected payment, request) opens its detail in a right-hand panel (full screen on phones), addressed as `?open=kind:id` so it can be linked and Back closes it. Header: a mono label for the record type and an icon close button; body: the record's heading and status, a ruled fact list, related records as links, then the record's own actions. Rows show a Mint Paper hover, and buttons inside a row keep working.
 
 ### Records (signature)
 A three-column row: status (square marker and word), body (title, quiet meta with relative time, optional note), actions right-aligned. An open task (match, note, close, a guarded request) opens a Mint Paper workbench under the body.
