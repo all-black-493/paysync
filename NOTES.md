@@ -5,6 +5,22 @@ Newest milestone first.
 
 ---
 
+## In-app assistant (OpenAI, AI Elements) — 2026-09-30
+
+Owner decisions: OpenAI as the provider, used sparingly; the chat UI uses AI Elements, styled to match.
+
+- **Provider:** `@ai-sdk/openai` 4.0.82, model `gpt-5.4-mini` (configurable, `ASSISTANT_MODEL`). The key was moved from `.env` to `secrets/openai_api_key` (git-ignored, read only when `ASSISTANT_ENABLED=true`). Owner may want to rotate it, since it sat in `.env`.
+- **Endpoint:** `assistant.chat` is a contract procedure (no endpoint lives only in a handler) that streams AI SDK UI message chunks through oRPC's event iterator; the web uses `useChat` with a transport over the typed client. Not an agent tool; not for API keys; web surface only; new permission **Use the assistant** (`assistant.use`, clerk and up, available to custom roles).
+- **Safety:** the assistant runs the M7 agent tools as the signed-in person (guard, Jev, budgets, approvals, audit all apply); destructive and money tools also need the person's confirmation in chat, and tool approval requests are signed (`experimental_toolApprovalSecret`, derived from the auth secret) so a client cannot confirm a call the model never made. Payer text is data, and the standing instructions say so.
+- **Cost controls:** at most 8 tool steps and 800 output tokens per turn, the newest 20 messages only, 30 turns per person per hour (`ASSISTANT_TURNS_PER_HOUR`, counted from `assistant.chat` audit events), token usage logged per turn. Tests use a mock model; one live turn was made while verifying ("What needs attention today?", 1 tool call, answered correctly).
+- **UI:** AI Elements (Conversation, Message + Response, Tool, Confirmation, Suggestion, Prompt Input, Shimmer) vendored from `registry.ai-sdk.dev` into `apps/web/src/components/ai-elements/` with their shadcn/ui primitives in `components/shadcn/` (imports rewritten to `@/components/shadcn/*` and `@/lib/cn`). Tailwind v4 builds only for them: theme + utilities, **no preflight**, sources limited to those folders; the app's element defaults moved into a lower `@layer paysync` so the Elements can style their own inputs. shadcn's theme variables map to Baselayer tokens (navy primary, mint surfaces, steel borders, our three fonts, 4px controls and square surfaces), so they look native.
+- **Vendored edits (kept small, listed so upgrades can re-apply them):** Tool shows JSON in a plain `<pre>` instead of the Shiki code block (no syntax highlighter shipped); removed `@ts-expect-error` lines that AI SDK v7 made stale; Tool badge, Suggestion chips and the scroll button squared (no pills); one `noUncheckedIndexedAccess` guard in Prompt Input's speech code. Vendored folders are excluded from ESLint.
+- **CSP:** `style-src` allows exactly one hash, Radix ScrollArea's injected scrollbar-hiding rule (update with radix-ui).
+- **Dependencies added (web, pinned):** `ai` 7.0.123, `@ai-sdk/react` 4.0.126, `class-variance-authority` 0.7.1, `clsx` 2.1.1, `cmdk` 1.1.1, `lucide-react` 1.49.0, `motion` 13.4.6, `nanoid` 6.0.1, `radix-ui` 1.6.7, `streamdown` 2.6.0, `tailwind-merge` 3.7.0, `use-stick-to-bottom` 1.1.6; dev: `tailwindcss` / `@tailwindcss/postcss` 4.3.3, `postcss` 8.5.28, `tw-animate-css` 1.4.0. Contract: `ai` (types), `@orpc/shared` (a portable type annotation for the stream).
+- **Tests:** `apps/api/src/assistant.int.test.ts` (mock model): streams text and a tool call made as the person, audits the turn, forbidden without the permission, rate limited after the hourly allowance, `ASSISTANT_OFF` when switched off. Suite 342 passed.
+
+---
+
 ## M7: AI SDK surface — done 2026-09-30
 
 ### Done-when evidence

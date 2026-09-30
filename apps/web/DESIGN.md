@@ -226,6 +226,9 @@ Sign-in, invitations and the organization picker put the owner's KICC photograph
 ### Detail panel
 Any record row (exception, transaction, expected payment, request) opens its detail in a right-hand panel (full screen on phones), addressed as `?open=kind:id` so it can be linked and Back closes it. Header: a mono label for the record type and an icon close button; body: the record's heading and status, a ruled fact list, related records as links, then the record's own actions. Rows show a Mint Paper hover, and buttons inside a row keep working.
 
+### Assistant panel
+The in-app assistant opens from an **Assistant** button on the navy field into the same right-hand panel as record details. Its content is AI Elements (shadcn/ui) themed onto these tokens: mint for the person's messages, the Tool block as a quiet collapsible with its status, Confirmation for chat-level go-ahead on risky tools, square suggestion chips, and a navy send button. Tailwind builds only for these components, without preflight.
+
 ### Records (signature)
 A three-column row: status (square marker and word), body (title, quiet meta with relative time, optional note), actions right-aligned. An open task (match, note, close, a guarded request) opens a Mint Paper workbench under the body.
 

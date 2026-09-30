@@ -18,3 +18,4 @@ minimumReleaseAgeExclude:
   - '@ai-sdk/mcp@2.0.63'
   - '@ai-sdk/openai@4.0.82'
   - '@ai-sdk/react@4.0.126'
+  - lucide-react@1.49.0

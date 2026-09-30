@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/.next/**', 'apps/web/out/**', '**/next-env.d.ts', 'data/**', 'skills/**'],
+    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/.next/**', 'apps/web/out/**', '**/next-env.d.ts', 'data/**', 'skills/**', 'apps/web/src/components/ai-elements/**', 'apps/web/src/components/shadcn/**'],
   },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,

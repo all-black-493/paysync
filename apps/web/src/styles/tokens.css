@@ -1,3 +1,6 @@
+/* Element defaults sit in a layer below Tailwind's utilities, so the vendored AI Elements can restyle their own inputs. */
+@layer theme, base, paysync, components, utilities;
+
 :root {
   color-scheme: light;
 

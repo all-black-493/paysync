@@ -21,10 +21,14 @@ const walk = (dir) => {
 }
 walk(outDir)
 
+// Runtime <style> elements the app injects, allowed by hash (update when radix-ui is upgraded):
+// Radix ScrollArea's viewport rule that hides native scrollbars (radix-ui 1.6.7), used by AI Elements' Suggestions.
+const STYLE_HASHES = ["'sha256-vGQdhYJbTuF+M8iCn1IZCHpdkiICocWHDq4qnQF4Rjw='"]
+
 const policy = [
   "default-src 'self'",
   `script-src 'self' ${[...hashes].sort().join(' ')}`,
-  "style-src 'self'",
+  `style-src 'self' ${STYLE_HASHES.join(' ')}`,
   "img-src 'self' data:",
   "connect-src 'self'",
   "frame-ancestors 'none'",

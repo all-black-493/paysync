@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import '../styles/tokens.css'
+import '../styles/ai-elements.css'
 import '../styles/base.css'
 import '../styles/controls.css'
 import '../styles/frame.css'

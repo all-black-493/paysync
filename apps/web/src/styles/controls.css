@@ -109,6 +109,7 @@
   color: var(--ink-quiet);
 }
 
+@layer paysync {
 input,
 select,
 textarea {
@@ -151,6 +152,7 @@ textarea::placeholder {
 
 input[aria-invalid='true'] {
   border-color: var(--danger);
+}
 }
 
 .form-row {

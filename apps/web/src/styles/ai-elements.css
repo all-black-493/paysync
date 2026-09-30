@@ -1,0 +1,73 @@
+/*
+ * Tailwind for the vendored AI Elements (shadcn/ui) only: theme and utilities,
+ * no preflight, so the rest of the app keeps its own CSS. shadcn's theme
+ * variables point at the Baselayer tokens, which makes the elements native.
+ */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+
+@source '../components/ai-elements';
+@source '../components/shadcn';
+@source '../components/assistant';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+  --color-card: var(--paper);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--paper);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--navy);
+  --color-primary-foreground: var(--on-field);
+  --color-secondary: var(--mint);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--mint);
+  --color-muted-foreground: var(--ink-quiet);
+  --color-accent: var(--mint);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--danger);
+  --color-border: var(--steel);
+  --color-input: var(--steel);
+  --color-ring: var(--blue);
+
+  --font-sans: var(--font-uncut), 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: var(--font-season), Georgia, serif;
+  --font-mono: var(--font-era), ui-monospace, monospace;
+
+  /* Baselayer: controls take 4px, content surfaces are square. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+}
+
+/* What shadcn's preflight would set: borders on its elements take the border colour, not the text colour. */
+@layer base {
+  [data-slot],
+  [data-slot] *,
+  .drawer :where(*) {
+    border-color: var(--color-border);
+  }
+
+  :where([data-slot]) :where(button, input, textarea, select),
+  :where(button, input, textarea, select)[data-slot] {
+    font: inherit;
+    letter-spacing: inherit;
+  }
+}
+
+/* Tool input and output stay plain JSON (no syntax highlighter). */
+.ai-json {
+  margin: 0;
+  padding: var(--space-3);
+  overflow-x: auto;
+  background: var(--mint);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

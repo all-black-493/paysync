@@ -3,10 +3,17 @@
 import { useChat } from '@ai-sdk/react'
 import { ORPCError } from '@orpc/client'
 import { isToolUIPart, lastAssistantMessageIsCompleteWithApprovalResponses } from 'ai'
-import { useEffect, useRef, useState, type SubmitEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from '@/components/ai-elements/conversation'
+import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
+import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputSubmit, PromptInputTextarea } from '@/components/ai-elements/prompt-input'
+import { Shimmer } from '@/components/ai-elements/shimmer'
+import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion'
 import { assistantTransport } from '../../lib/assistant-transport'
 import { useRefreshRecords } from '../../lib/refresh'
-import { ToolStep } from './tool-step'
+import { ToolPart } from './tool-part'
+
+const STARTERS = ['What needs attention today?', 'Match the payments that clearly fit', 'What is waiting for approval?']
 
 const newChatId = () => `c${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`
 
@@ -17,7 +24,7 @@ function errorText(error: Error): string {
   return 'Something went wrong. Try again.'
 }
 
-/** The in-app assistant in a side panel: it works as you, and anything risky still waits for an approver. */
+/** The in-app assistant (AI Elements) in the side panel: it works as you, and anything risky still waits for an approver. */
 export function AssistantDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
   const refresh = useRefreshRecords()
@@ -39,14 +46,10 @@ export function AssistantDrawer({ open, onClose }: { open: boolean; onClose: () 
     if (!open && dialog.open) dialog.close()
   }, [open])
 
-  function onSubmit(event: SubmitEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = event.currentTarget
-    const text = new FormData(form).get('message')
-    if (typeof text !== 'string' || text.trim() === '' || busy) return
+  function send(text: string) {
+    if (text.trim() === '' || busy) return
     clearError()
     void sendMessage({ text: text.trim() })
-    form.reset()
   }
 
   return (
@@ -68,44 +71,54 @@ export function AssistantDrawer({ open, onClose }: { open: boolean; onClose: () 
           </div>
         </header>
         <div className="assistant-body">
-          <div className="assistant-log" aria-live="polite">
+          <Conversation className="min-h-0">
+            <ConversationContent>
+              {messages.length === 0 ? (
+                <ConversationEmptyState
+                  title="Ask about your payments"
+                  description="It works as you. Voids, write-offs and reversals still wait for an approver."
+                />
+              ) : null}
+              {messages.map((m) => (
+                <Message key={m.id} from={m.role}>
+                  <MessageContent>
+                    {m.parts.map((part, i) => {
+                      const key = `${m.id}-${String(i)}`
+                      if (part.type === 'text') return <MessageResponse key={key}>{part.text}</MessageResponse>
+                      if (isToolUIPart(part)) {
+                        return <ToolPart key={key} part={part} onDecide={(id, approved) => void addToolApprovalResponse({ id, approved })} />
+                      }
+                      return null
+                    })}
+                  </MessageContent>
+                </Message>
+              ))}
+              {status === 'submitted' ? <Shimmer>Thinking…</Shimmer> : null}
+              {error ? (
+                <p className="error" role="alert">
+                  {errorText(error)}
+                </p>
+              ) : null}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
+          <div className="assistant-compose">
             {messages.length === 0 ? (
-              <p className="quiet">Ask about today’s exceptions, or to match what clearly fits. It works as you, and voids, write-offs and reversals still wait for an approver.</p>
+              <Suggestions>
+                {STARTERS.map((s) => (
+                  <Suggestion key={s} suggestion={s} onClick={send} />
+                ))}
+              </Suggestions>
             ) : null}
-            {messages.map((m) => (
-              <div key={m.id} className={m.role === 'user' ? 'assistant-msg user' : 'assistant-msg'}>
-                {m.parts.map((part, i) => {
-                  const key = `${m.id}-${String(i)}`
-                  if (part.type === 'text') return <p key={key}>{part.text}</p>
-                  if (isToolUIPart(part)) {
-                    return <ToolStep key={key} part={part} onDecide={(id, approved) => void addToolApprovalResponse({ id, approved })} />
-                  }
-                  return null
-                })}
-              </div>
-            ))}
-            {status === 'submitted' ? <p className="quiet">Thinking…</p> : null}
-            {error ? (
-              <p className="error" role="alert">
-                {errorText(error)}
-              </p>
-            ) : null}
+            <PromptInput onSubmit={({ text }) => { send(text) }}>
+              <PromptInputBody>
+                <PromptInputTextarea placeholder="Ask the assistant" maxLength={2000} />
+              </PromptInputBody>
+              <PromptInputFooter className="justify-end">
+                <PromptInputSubmit status={status} onClick={busy ? (e) => { e.preventDefault(); void stop() } : undefined} />
+              </PromptInputFooter>
+            </PromptInput>
           </div>
-          <form className="assistant-input" onSubmit={onSubmit}>
-            <label className="visually-hidden" htmlFor="assistant-message">
-              Message
-            </label>
-            <textarea id="assistant-message" name="message" rows={2} maxLength={2000} placeholder="Match the payments that clearly fit" />
-            {busy ? (
-              <button type="button" className="btn" onClick={() => void stop()}>
-                Stop
-              </button>
-            ) : (
-              <button type="submit" className="btn btn-primary">
-                Send
-              </button>
-            )}
-          </form>
         </div>
       </div>
     </dialog>

@@ -1,3 +1,4 @@
+@layer paysync {
 *,
 *::before,
 *::after {
@@ -62,6 +63,7 @@ kbd {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--steel) transparent;
+}
 }
 
 .visually-hidden {
