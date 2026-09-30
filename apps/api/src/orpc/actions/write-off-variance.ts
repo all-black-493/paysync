@@ -2,7 +2,7 @@ import { Transaction, fromMoney, type Money } from '@paysync/contract'
 import { RECEIPT_ACCOUNTS, ensureAccount, postJournal, schema, type Tx } from '@paysync/db'
 import { eq, gte, sql } from 'drizzle-orm'
 import { ActionError, type GuardedAction, type GuardedInput } from '../guarding/index.js'
-import { kes, paymentFor, startOfTodayEat, transactionOutput } from './shared.js'
+import { kes, paymentFor, startOfTodayEat, transactionOutput, paymentRecords } from './shared.js'
 
 const { mpesaTransaction, varianceWriteOff } = schema
 
@@ -26,6 +26,7 @@ export const writeOffVariance: GuardedAction<WriteOffInput, Awaited<ReturnType<t
   procedure: 'transactions.writeOffVariance',
   result: Transaction,
   isolation: 'serializable',
+  records: (tx, input) => paymentRecords(tx, input.transactionId),
   async summary(tx, input) {
     const payment = await paymentFor(tx, input.transactionId, input.version, false)
     return `Write off ${kes(fromMoney(input.amount))} of payment ${payment.receiptNumber}: ${input.reason}`

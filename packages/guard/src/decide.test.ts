@@ -1,6 +1,7 @@
 import type { AgentMeta } from '@paysync/contract'
 import { describe, expect, it } from 'vitest'
-import { decide, type GuardRequest } from './decide.js'
+import { decide, needsJudgement, type GuardRequest } from './decide.js'
+import type { Judgement } from './judgement.js'
 
 const read: AgentMeta = { name: 'list_things', risk: 'read' }
 const write: AgentMeta = { name: 'confirm_match', risk: 'write' }
@@ -81,5 +82,72 @@ describe('static policy', () => {
 
   it('approval never: allowed even with doubts', () => {
     expect(decide(request({ meta: note, surface: 'mcp', actor: 'machine', checks: { blocks: [], doubts: ['x'] } }))).toMatchObject({ kind: 'allow' })
+  })
+})
+
+describe('Jev judgement (§8.3 step 7)', () => {
+  const agent = (meta: AgentMeta, judgement: Judgement): GuardRequest => request({ meta, surface: 'mcp', actor: 'machine', judgement })
+  const fine = (over: Partial<Extract<Judgement, { kind: 'answered' }>> = {}): Judgement => ({
+    kind: 'answered',
+    intent: 'matches_request',
+    intentConfidence: 0.95,
+    injection: 0.01,
+    scope: 0.05,
+    ...over,
+  })
+
+  it('is asked for agent calls that change something, never for people or reads', () => {
+    expect(needsJudgement(write, 'mcp')).toBe(true)
+    expect(needsJudgement(destructive, 'ai-sdk')).toBe(true)
+    expect(needsJudgement(write, 'web')).toBe(false)
+    expect(needsJudgement(write, 'rest')).toBe(false)
+    expect(needsJudgement(read, 'mcp')).toBe(false)
+    expect(needsJudgement(note, 'mcp')).toBe(false)
+    expect(needsJudgement(undefined, 'mcp')).toBe(false)
+  })
+
+  it('a satisfied Jev lets an on-doubt write through', () => {
+    expect(decide(agent(write, fine()))).toEqual({ kind: 'allow', reasons: [] })
+  })
+
+  it('injection above 0.2 blocks, even what would only need approval', () => {
+    for (const meta of [write, destructive, money]) {
+      expect(decide(agent(meta, fine({ injection: 0.21 })))).toMatchObject({ kind: 'block', reasons: [expect.stringContaining('instructions')] })
+    }
+    expect(decide(agent(write, fine({ injection: 0.2 }))).kind).toBe('allow')
+  })
+
+  it('scope above 0.3 needs a person', () => {
+    expect(decide(agent(write, fine({ scope: 0.31 })))).toMatchObject({ kind: 'require_approval', reasons: [expect.stringContaining('further')] })
+    expect(decide(agent(write, fine({ scope: 0.3 }))).kind).toBe('allow')
+  })
+
+  it('any intent but matches_request, or a confidence under 0.8, needs a person', () => {
+    for (const intent of ['partially_matches', 'contradicts_request', 'unclear'] as const) {
+      expect(decide(agent(write, fine({ intent })))).toMatchObject({ kind: 'require_approval', reasons: [expect.stringContaining(intent.replaceAll('_', ' '))] })
+    }
+    expect(decide(agent(write, fine({ intentConfidence: 0.79 })))).toMatchObject({ kind: 'require_approval', reasons: [expect.stringContaining('unsure')] })
+    expect(decide(agent(write, fine({ intentConfidence: 0.8 }))).kind).toBe('allow')
+  })
+
+  it('no answer (error or over 800 ms) means a person decides: fail closed', () => {
+    expect(decide(agent(write, { kind: 'unavailable', reason: 'timeout' }))).toMatchObject({
+      kind: 'require_approval',
+      reasons: ['Jev could not judge this action (timeout)'],
+    })
+  })
+
+  it('destructive and money actions keep their approvals, with Jev’s doubts added', () => {
+    expect(decide(agent(destructive, fine({ scope: 0.9 })))).toMatchObject({
+      kind: 'require_approval',
+      approvalsRequired: 1,
+      reasons: ['destructive: always needs approval', expect.stringContaining('further')],
+    })
+    expect(decide(agent(money, fine()))).toMatchObject({ kind: 'require_approval', approvalsRequired: 2 })
+  })
+
+  it('never loosens: deterministic blocks and doubts stand whatever Jev says', () => {
+    expect(decide({ ...agent(write, fine()), checks: { blocks: ['above the cap'], doubts: [] } })).toMatchObject({ kind: 'block', reasons: ['above the cap'] })
+    expect(decide({ ...agent(write, fine()), checks: { blocks: [], doubts: ['reference does not fit'] } })).toMatchObject({ kind: 'require_approval' })
   })
 })

@@ -59,6 +59,9 @@ export interface MutationOptions<T> {
   /** The guard's decision and reasons, for the audit log. */
   readonly decision?: string
   readonly reasons?: readonly string[]
+  /** Extra decision evidence for the audit log, e.g. Jev's answers (§8.5). */
+  readonly evidence?: Record<string, unknown>
+  readonly agentSessionId?: string
 }
 
 /**
@@ -106,11 +109,12 @@ export async function mutate<T>(options: MutationOptions<T>): Promise<Preview<T>
         orgId: caller.orgId,
         surface: options.surface,
         userId: caller.actorId,
+        agentSessionId: options.agentSessionId ?? null,
         action: options.action,
         input: redact(input),
         decision: options.decision ?? 'allow',
         outcome: changed ? 'changed' : 'unchanged',
-        details: { sessionId: caller.session?.id ?? null, reasons: options.reasons ?? [] },
+        details: { sessionId: caller.session?.id ?? null, reasons: options.reasons ?? [], ...options.evidence },
       })
       return preview
     }, { isolation: options.isolation ?? 'read committed' })

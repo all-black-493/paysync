@@ -34,6 +34,7 @@ export async function loadCandidates(tx: Tx, ids?: readonly string[]): Promise<C
     .select({
       id: expectedPayment.id,
       reference: expectedPayment.reference,
+      description: expectedPayment.description,
       amountDue: expectedPayment.amountDue,
       dueDate: expectedPayment.dueDate,
       status: expectedPayment.status,
@@ -106,8 +107,10 @@ export interface ApplyMatchInput {
   readonly transactionId: string
   /** When given, the transaction must still be at this version (optimistic concurrency). */
   readonly expectedVersion?: number
-  readonly method: 'exact' | 'rule' | 'manual'
+  readonly method: 'exact' | 'rule' | 'jev' | 'manual'
   readonly parts: ReadonlyArray<{ readonly expectedPaymentId: string; readonly amount: bigint }>
+  /** Jev-based matches keep the confidence and the full distribution (§7.3). */
+  readonly jev?: { readonly confidence: number; readonly probabilities: Readonly<Record<string, number>> }
   readonly actorUserId?: string | null
   readonly createdBy: string
 }
@@ -155,7 +158,14 @@ export async function applyMatch(tx: Tx, input: ApplyMatchInput): Promise<{ matc
 
   const [created] = await tx
     .insert(match)
-    .values({ orgId: input.orgId, transactionId: input.transactionId, method: input.method, actorUserId: input.actorUserId ?? null })
+    .values({
+      orgId: input.orgId,
+      transactionId: input.transactionId,
+      method: input.method,
+      actorUserId: input.actorUserId ?? null,
+      confidence: input.jev ? input.jev.confidence.toFixed(4) : null,
+      jevProbabilities: input.jev?.probabilities ?? null,
+    })
     .returning({ id: match.id })
   if (!created) throw new Error('match insert returned no row')
   await allocate(tx, { orgId: input.orgId, transactionId: input.transactionId, matchId: created.id, parts: input.parts })

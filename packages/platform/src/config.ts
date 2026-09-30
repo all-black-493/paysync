@@ -128,3 +128,16 @@ export const databaseEnvShape = {
 }
 
 export const DATABASE_SECRETS = ['DATABASE_PASSWORD'] as const
+
+/** Jev is off unless switched on; then the TypeSafe key must come from a secret file. */
+export const jevEnvShape = {
+  JEV_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  TYPESAFE_API_KEY: z.string().min(16).optional(),
+}
+
+export function jevSecrets(env: Env = process.env): readonly string[] {
+  return env.JEV_ENABLED === 'true' ? ['TYPESAFE_API_KEY'] : []
+}

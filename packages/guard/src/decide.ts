@@ -1,4 +1,6 @@
 import { approvalPolicyOf, type AgentMeta } from '@paysync/contract'
+import { injectionFound, judgementDoubts, type Judgement, type JudgementThresholds } from './judgement.js'
+import { DEFAULT_GUARD_POLICY } from './policy.js'
 
 export type GuardSurface = 'web' | 'rest' | 'ai-sdk' | 'mcp'
 
@@ -16,6 +18,9 @@ export interface GuardRequest {
     readonly doubts: readonly string[]
   }
   readonly production: boolean
+  /** Jev's view of an agent action; absent when Jev was not asked (people, reads). */
+  readonly judgement?: Judgement
+  readonly thresholds?: JudgementThresholds
 }
 
 export type GuardDecision =
@@ -25,9 +30,15 @@ export type GuardDecision =
 
 const AGENT_SURFACES = new Set<GuardSurface>(['ai-sdk', 'mcp'])
 
+/** Jev judges agent calls that change something (§8.3 step 7); people and reads are not asked. */
+export function needsJudgement(meta: AgentMeta | undefined, surface: GuardSurface): boolean {
+  return meta !== undefined && AGENT_SURFACES.has(surface) && approvalPolicyOf(meta) !== 'never'
+}
+
 /**
- * The static guard (AGENTS.md §8.3 steps 1, 5, 6 and 8; Jev joins in M6).
- * Fails closed: an agent calling something without agent metadata is blocked.
+ * The guard's decision (AGENTS.md §8.3 steps 1 and 5–8). Fails closed: an
+ * agent calling something without agent metadata is blocked, and Jev can only
+ * tighten a decision (block, or ask a person), never loosen one.
  */
 export function decide(request: GuardRequest): GuardDecision {
   const { meta, surface, checks } = request
@@ -41,17 +52,23 @@ export function decide(request: GuardRequest): GuardDecision {
   if (checks.blocks.length > 0) return { kind: 'block', reasons: [...checks.blocks] }
   if (!meta) return { kind: 'allow', reasons: [] }
 
+  const thresholds = request.thresholds ?? DEFAULT_GUARD_POLICY.jev
+  const injection = injectionFound(request.judgement, thresholds)
+  if (injection) return { kind: 'block', reasons: [injection] }
+  const jevDoubts = judgementDoubts(request.judgement, thresholds)
+
   const policy = approvalPolicyOf(meta)
   const approvalsRequired: 1 | 2 = meta.money && request.production ? 2 : (meta.approvers ?? 1)
   if (policy === 'always') {
     return {
       kind: 'require_approval',
       approvalsRequired,
-      reasons: [meta.money ? 'moves money: always needs approval' : 'destructive: always needs approval', ...checks.doubts],
+      reasons: [meta.money ? 'moves money: always needs approval' : 'destructive: always needs approval', ...checks.doubts, ...jevDoubts],
     }
   }
-  if (policy === 'on-doubt' && request.actor === 'machine' && checks.doubts.length > 0) {
-    return { kind: 'require_approval', approvalsRequired, reasons: [...checks.doubts] }
+  const doubts = request.actor === 'machine' ? [...checks.doubts, ...jevDoubts] : []
+  if (policy === 'on-doubt' && doubts.length > 0) {
+    return { kind: 'require_approval', approvalsRequired, reasons: doubts }
   }
   return { kind: 'allow', reasons: [] }
 }

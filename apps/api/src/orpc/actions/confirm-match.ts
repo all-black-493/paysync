@@ -3,7 +3,7 @@ import { schema } from '@paysync/db'
 import { applyMatch, referenceKey, resolveMatchExceptions } from '@paysync/matching'
 import { inArray } from 'drizzle-orm'
 import type { GuardedAction, GuardedInput } from '../guarding/index.js'
-import { fromMatchError, kes, matchOutput, paymentFor } from './shared.js'
+import { fromMatchError, kes, matchOutput, paymentFor, paymentRecords } from './shared.js'
 
 const { expectedPayment } = schema
 
@@ -18,6 +18,7 @@ export const confirmMatch: GuardedAction<ConfirmInput, Awaited<ReturnType<typeof
   procedure: 'matches.confirm',
   result: Match,
   isolation: 'serializable',
+  records: (tx, input) => paymentRecords(tx, input.transactionId),
   async summary(tx, input) {
     const payment = await paymentFor(tx, input.transactionId, input.version, false)
     const total = input.allocations.reduce((sum, a) => sum + fromMoney(a.amount), 0n)

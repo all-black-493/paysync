@@ -14,6 +14,8 @@ import {
   DATABASE_SECRETS,
   closeServer,
   commonEnvShape,
+  jevEnvShape,
+  jevSecrets,
   createHealthRoutes,
   createHealthServer,
   createLogger,
@@ -23,6 +25,7 @@ import {
   listen,
   loadConfig,
 } from '@paysync/platform'
+import { jevFromConfig } from '@paysync/decisions'
 import { DEFAULT_MATCH_POLICY } from '@paysync/matching'
 import { run } from 'graphile-worker'
 import { z } from 'zod'
@@ -44,6 +47,8 @@ const configSchema = z.object({
   CALLBACK_PATH_SECRET: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/, 'at least 32 URL-safe characters'),
   CALLBACK_BASE_URL: z.preprocess((v) => (v === '' ? undefined : v), z.url().optional()),
   DATA_ENCRYPTION_KEY: z.string().regex(/^[0-9a-f]{64}$/, '64 hex characters'),
+
+  ...jevEnvShape,
 })
 
 const SECRETS = [
@@ -57,7 +62,7 @@ const SECRETS = [
 ]
 
 async function main(): Promise<void> {
-  const config = loadConfig(configSchema, { secrets: SECRETS })
+  const config = loadConfig(configSchema, { secrets: [...SECRETS, ...jevSecrets()] })
   const logger = createLogger({ service: 'worker', level: config.LOG_LEVEL })
   const pool = createPool({
     url: config.DATABASE_URL,
@@ -95,8 +100,10 @@ async function main(): Promise<void> {
     resultUrls: config.CALLBACK_BASE_URL ? resultUrlsFor(config.CALLBACK_BASE_URL, config.CALLBACK_PATH_SECRET) : null,
     policy: DEFAULT_POLICY,
     matchPolicy: DEFAULT_MATCH_POLICY,
+    jev: jevFromConfig(config),
     now: () => new Date(),
   }
+  if (!config.JEV_ENABLED) logger.warn('JEV_ENABLED is off: the Jev matching tier is skipped')
   if (!deps.resultUrls) logger.warn('CALLBACK_BASE_URL is not set: Transaction Status and Account Balance requests are disabled')
   if (!initiator) logger.warn('DARAJA_INITIATOR_NAME is not set: Transaction Status and Account Balance requests are disabled')
 

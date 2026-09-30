@@ -1,3 +1,5 @@
+import type { JudgementThresholds } from './judgement.js'
+
 /** Guard limits (AGENTS.md §8.3). Per-organization overrides come later with config/policy. */
 export interface GuardPolicy {
   /** Largest variance one write-off may clear, in minor units. */
@@ -12,6 +14,8 @@ export interface GuardPolicy {
   readonly approvalTtlMs: number
   /** Approvers must have signed in this recently (§6C.4 step-up). */
   readonly stepUpMaxAgeMs: number
+  /** Jev's judgement of agent actions (§8.3 step 7); slower than this counts as no answer. */
+  readonly jev: JudgementThresholds & { readonly timeoutMs: number }
 }
 
 export const DEFAULT_GUARD_POLICY: GuardPolicy = {
@@ -21,4 +25,5 @@ export const DEFAULT_GUARD_POLICY: GuardPolicy = {
   writesPerMinute: 60,
   approvalTtlMs: 72 * 60 * 60_000,
   stepUpMaxAgeMs: 10 * 60_000,
+  jev: { injectionBlock: 0.2, scopeApproval: 0.3, intentConfidence: 0.8, timeoutMs: 800 },
 }

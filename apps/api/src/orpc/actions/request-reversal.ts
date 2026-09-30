@@ -2,7 +2,7 @@ import { ReversalRequest, type Money } from '@paysync/contract'
 import { enqueueJob, schema } from '@paysync/db'
 import { and, count, eq, gte, inArray } from 'drizzle-orm'
 import { ActionError, type GuardedAction, type GuardedInput } from '../guarding/index.js'
-import { kes, paymentFor, startOfTodayEat } from './shared.js'
+import { kes, paymentFor, startOfTodayEat, paymentRecords } from './shared.js'
 
 const { darajaRequest, mpesaTransaction } = schema
 
@@ -27,6 +27,7 @@ interface ReversalOutput {
 export const requestReversal: GuardedAction<ReversalInput, ReversalOutput> = {
   procedure: 'reversals.request',
   result: ReversalRequest,
+  records: (tx, input) => paymentRecords(tx, input.transactionId),
   async summary(tx, input) {
     const payment = await paymentFor(tx, input.transactionId, input.version, false)
     return `Reverse payment ${payment.receiptNumber} of ${kes(payment.amount)} back to the payer: ${input.reason}`

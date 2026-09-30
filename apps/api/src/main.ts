@@ -1,11 +1,14 @@
 import { inspect } from 'node:util'
 import { createAuth } from './auth.js'
 import { createDb, createPool, loadMigrations } from '@paysync/db'
+import { jevFromConfig } from '@paysync/decisions'
 import {
   ConfigError,
   DATABASE_SECRETS,
   closeServer,
   commonEnvShape,
+  jevEnvShape,
+  jevSecrets,
   createLogger,
   createSealer,
   databaseEnvShape,
@@ -31,11 +34,13 @@ const configSchema = z.object({
     .string()
     .default('')
     .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean)),
+
+  ...jevEnvShape,
 })
 
 async function main(): Promise<void> {
   const config = loadConfig(configSchema, {
-    secrets: [...DATABASE_SECRETS, 'BETTER_AUTH_SECRET', 'CALLBACK_PATH_SECRET', 'DATA_ENCRYPTION_KEY'],
+    secrets: [...DATABASE_SECRETS, 'BETTER_AUTH_SECRET', 'CALLBACK_PATH_SECRET', 'DATA_ENCRYPTION_KEY', ...jevSecrets()],
   })
   const logger = createLogger({ service: 'api', level: config.LOG_LEVEL })
   const pool = createPool({
@@ -51,6 +56,7 @@ async function main(): Promise<void> {
     pool,
     db,
     auth,
+    jev: jevFromConfig(config),
     migrations: loadMigrations(),
     logger,
     publicUrl: config.PUBLIC_URL,

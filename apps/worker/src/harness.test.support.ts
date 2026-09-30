@@ -1,5 +1,6 @@
 import { DarajaClient, fixture, type CachedToken, type PullRecord, type TokenStore } from '@paysync/daraja'
 import { JOB_SCHEMA, createDb, graphileLogger, type Db } from '@paysync/db'
+import { JEV_NOT_CONFIGURED, type Jev } from '@paysync/decisions'
 import { DEFAULT_MATCH_POLICY } from '@paysync/matching'
 import type { IngestDeps } from '@paysync/ingest'
 import { createLogger, createSealer } from '@paysync/platform'
@@ -102,6 +103,7 @@ export interface Harness {
 export interface HarnessOptions {
   readonly initiator?: boolean
   readonly resultUrls?: boolean
+  readonly jev?: Jev
   readonly policy?: Partial<VerificationPolicy>
 }
 
@@ -141,6 +143,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     resultUrls: options.resultUrls === false ? null : resultUrlsFor('https://paysync.example', SECRET),
     policy: { ...DEFAULT_POLICY, ...options.policy },
     matchPolicy: DEFAULT_MATCH_POLICY,
+    jev: options.jev ?? JEV_NOT_CONFIGURED,
     now: () => new Date(Date.now() + offset),
   }
 

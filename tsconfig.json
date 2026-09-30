@@ -29,6 +29,9 @@
       "path": "packages/guard"
     },
     {
+      "path": "packages/decisions"
+    },
+    {
       "path": "packages/audit"
     }
   ]

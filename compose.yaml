@@ -83,6 +83,8 @@ services:
       DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
       DARAJA_ENV: sandbox
       CALLBACK_ALLOWED_IPS: ${CALLBACK_ALLOWED_IPS:-}
+      JEV_ENABLED: ${JEV_ENABLED:-false}
+      TYPESAFE_API_KEY_FILE: /run/secrets/typesafe_api_key
       NODE_OPTIONS: --max-old-space-size=384
     secrets:
       - source: db_app_password
@@ -90,10 +92,12 @@ services:
       - better_auth_secret
       - callback_path_secret
       - data_encryption_key
+      - typesafe_api_key
     depends_on:
       db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
-    networks: [internal, edge]
+    # egress: the guard asks Jev (TypeSafe) about agent actions.
+    networks: [internal, edge, egress]
     deploy:
       resources:
         limits: { memory: 512m }
@@ -117,6 +121,8 @@ services:
       CALLBACK_PATH_SECRET_FILE: /run/secrets/callback_path_secret
       CALLBACK_BASE_URL: ${CALLBACK_BASE_URL:-}
       DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
+      JEV_ENABLED: ${JEV_ENABLED:-false}
+      TYPESAFE_API_KEY_FILE: /run/secrets/typesafe_api_key
     secrets:
       - source: db_app_password
         target: db_password
@@ -126,6 +132,7 @@ services:
       - daraja_initiator_password
       - callback_path_secret
       - data_encryption_key
+      - typesafe_api_key
     depends_on:
       db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
@@ -280,3 +287,5 @@ secrets:
     file: ./secrets/daraja_initiator_password
   ngrok_authtoken:
     file: ./secrets/ngrok_authtoken
+  typesafe_api_key:
+    file: ./secrets/typesafe_api_key

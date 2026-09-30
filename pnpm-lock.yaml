@@ -225,6 +225,9 @@ importers:
       '@paysync/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@paysync/decisions':
+        specifier: workspace:*
+        version: link:../../packages/decisions
       '@paysync/guard':
         specifier: workspace:*
         version: link:../../packages/guard
@@ -342,6 +345,9 @@ importers:
       '@paysync/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@paysync/decisions':
+        specifier: workspace:*
+        version: link:../../packages/decisions
       '@paysync/ingest':
         specifier: workspace:*
         version: link:../../packages/ingest
@@ -456,11 +462,24 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.13.6)(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
+  packages/decisions:
+    dependencies:
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.6)(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
+
   packages/guard:
     dependencies:
       '@paysync/contract':
         specifier: workspace:*
         version: link:../contract
+      '@paysync/decisions':
+        specifier: workspace:*
+        version: link:../decisions
     devDependencies:
       vitest:
         specifier: 4.1.11
@@ -502,6 +521,9 @@ importers:
       '@paysync/db':
         specifier: workspace:*
         version: link:../db
+      '@paysync/decisions':
+        specifier: workspace:*
+        version: link:../decisions
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0)

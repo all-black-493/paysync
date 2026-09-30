@@ -27,6 +27,9 @@
     },
     {
       "path": "../../packages/matching"
+    },
+    {
+      "path": "../../packages/decisions"
     }
   ]
 }

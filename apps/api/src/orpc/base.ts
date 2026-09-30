@@ -8,7 +8,9 @@ import type {
   RequestHeadersHandlerPluginContext,
   ResponseHeadersHandlerPluginContext,
 } from '@orpc/server/plugins'
+import type { Jev } from '@paysync/decisions'
 import { and, eq, inArray } from 'drizzle-orm'
+import type { AgentSession } from './guarding/types.js'
 import { permissionFor } from './permissions.js'
 import { permix } from './permix.js'
 
@@ -20,6 +22,10 @@ export interface InitialContext extends RequestHeadersHandlerPluginContext, Resp
   readonly db: Db
   readonly logger: Logger
   readonly surface: Surface
+  /** Only packages/decisions talks to Jev; this is the client it uses. */
+  readonly jev: Jev
+  /** Present on agent surfaces: the session and the person's request (M7/M8). */
+  readonly agent?: AgentSession
 }
 
 export interface Caller {

@@ -2,6 +2,8 @@ export {
   ConfigError,
   DATABASE_SECRETS,
   commonEnvShape,
+  jevEnvShape,
+  jevSecrets,
   databaseConnectionParams,
   databaseEnvShape,
   databaseUrlSchema,

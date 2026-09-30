@@ -1,3 +1,4 @@
+import { JEV_NOT_CONFIGURED, type Jev } from '@paysync/decisions'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { Auth } from './auth.js'
 import { checkMigrations, type Db, type Migration, type Pool } from '@paysync/db'
@@ -25,6 +26,8 @@ export interface ApiServerDeps {
   readonly pool: Pool
   readonly db: Db
   readonly auth: Auth
+  /** Jev for the guard's judgement of agent actions; fails closed when absent. */
+  readonly jev?: Jev
   readonly migrations: readonly Migration[]
   readonly logger: Logger
   /** Browser-facing origin; the only CORS origin allowed. */
@@ -116,7 +119,7 @@ export function createApiServer(deps: ApiServerDeps): ApiServer {
   const authHandler = toNodeHandler(deps.auth)
   const hooks = createHookHandler({ ...deps.hooks, db: deps.db, logger: deps.logger })
 
-  const baseContext = { auth: deps.auth, db: deps.db, logger: deps.logger }
+  const baseContext = { auth: deps.auth, db: deps.db, logger: deps.logger, jev: deps.jev ?? JEV_NOT_CONFIGURED }
 
   const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (health.handle(req, res)) return

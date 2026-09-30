@@ -1,5 +1,6 @@
 import type { DarajaClient, DarajaEnvironment, ResultUrls } from '@paysync/daraja'
 import type { Db } from '@paysync/db'
+import type { Jev } from '@paysync/decisions'
 import type { MatchPolicy } from '@paysync/matching'
 import type { Logger, Sealer } from '@paysync/platform'
 
@@ -40,6 +41,8 @@ export interface WorkerDeps {
   readonly resultUrls: ((kind: ResultUrlKind) => ResultUrls) | null
   readonly policy: VerificationPolicy
   readonly matchPolicy: MatchPolicy
+  /** Jev for the matching tier; JEV_NOT_CONFIGURED when there is no TypeSafe key (the tier is skipped). */
+  readonly jev: Jev
   readonly now: () => Date
 }
 

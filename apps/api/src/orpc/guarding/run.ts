@@ -1,10 +1,11 @@
 import { CONSTRAINTS, SQLSTATE, pgConstraint, pgErrorCode, schema, withOrg } from '@paysync/db'
-import { DEFAULT_GUARD_POLICY, decide, type GuardDecision } from '@paysync/guard'
+import { DEFAULT_GUARD_POLICY, decide, needsJudgement, type GuardDecision } from '@paysync/guard'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { mutate, type Preview } from '../mutate.js'
 import { auditDecision, tooManyWrites } from './audit.js'
 import { approvalRequired, mapActionError } from './errors.js'
+import { judge } from './judge.js'
 import { agentMetaFor } from './procedure-meta.js'
 import { actorOf, type GuardContext, type GuardErrors, type GuardedAction, type GuardedInput } from './types.js'
 
@@ -28,7 +29,7 @@ export async function runGuarded<I extends GuardedInput, R>(
   const { caller, db } = context
   const meta = agentMetaFor(action.procedure)
   const output = z.object({ dryRun: z.boolean(), changed: z.boolean(), result: action.result }) as z.ZodType<Preview<R>>
-  const runDirect = (decision: GuardDecision, dryRun: boolean) =>
+  const runDirect = (decision: GuardDecision, dryRun: boolean, jev?: Record<string, unknown>) =>
     mutate({
       db,
       caller,
@@ -39,6 +40,8 @@ export async function runGuarded<I extends GuardedInput, R>(
       ...(action.isolation ? { isolation: action.isolation } : {}),
       decision: dryRun ? 'dry_run' : decision.kind,
       reasons: decision.reasons,
+      ...(jev ? { evidence: { jev } } : {}),
+      ...(context.agent?.sessionId ? { agentSessionId: context.agent.sessionId } : {}),
       run: (tx) => action.run(tx, input, actorOf(caller)),
     }).catch((error: unknown) => mapActionError(errors, error))
 
@@ -61,24 +64,37 @@ export async function runGuarded<I extends GuardedInput, R>(
     summary: await action.summary(tx, input),
     checks: (await action.checks?.(tx, input, caller, policy)) ?? { blocks: [], doubts: [] },
     overBudget: (await action.overBudget?.(tx, input, policy)) ?? null,
+    records: needsJudgement(meta, context.surface) ? ((await action.records?.(tx, input)) ?? null) : null,
   })).catch((error: unknown) => mapActionError(errors, error))
 
-  const decision = decide({ meta, surface: context.surface, actor: isPerson(context) ? 'person' : 'machine', checks: facts.checks, production: false })
+  // Asked after the read transaction closed: never call Jev with a transaction open (§6B.5).
+  const judged = needsJudgement(meta, context.surface) ? await judge(context, action.procedure, facts.summary, input, facts.records, policy) : undefined
+  const jev = judged?.evidence
+  const decision = decide({
+    meta,
+    surface: context.surface,
+    actor: isPerson(context) ? 'person' : 'machine',
+    checks: facts.checks,
+    production: false,
+    thresholds: policy.jev,
+    ...(judged ? { judgement: judged.judgement } : {}),
+  })
 
   if (decision.kind === 'block' || facts.overBudget) {
     await withOrg(db, caller.orgId, (tx) =>
       auditDecision(tx, context, action.procedure, input, decision.kind === 'block' ? 'block' : 'budget_exceeded', 'refused', {
         reasons: decision.reasons,
         budget: facts.overBudget,
+        ...(jev ? { jev } : {}),
       }),
     )
     if (decision.kind === 'block') throw errors.BLOCKED({ data: { reason: decision.reasons.join('; ') } })
     if (facts.overBudget) throw errors.BUDGET_EXCEEDED({ data: facts.overBudget })
   }
 
-  if (decision.kind === 'allow' || input.dryRun) return runDirect(decision, input.dryRun === true)
+  if (decision.kind === 'allow' || input.dryRun) return runDirect(decision, input.dryRun === true, jev)
 
-  const preview = await runDirect(decision, true)
+  const preview = await runDirect(decision, true, jev)
   const { approvalsRequired } = decision
   const { idempotencyKey } = input
   // Stored exactly as it will run on approval (with its idempotency key, without dryRun).
@@ -105,7 +121,11 @@ export async function runGuarded<I extends GuardedInput, R>(
         })
         .returning()
       if (!row) throw new Error('pending action insert returned no row')
-      await auditDecision(tx, context, action.procedure, input, 'require_approval', 'pending', { pendingActionId: row.id, reasons: decision.reasons })
+      await auditDecision(tx, context, action.procedure, input, 'require_approval', 'pending', {
+        pendingActionId: row.id,
+        reasons: decision.reasons,
+        ...(jev ? { jev } : {}),
+      })
       return row
     })
     throw approvalRequired(errors, created)

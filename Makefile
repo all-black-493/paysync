@@ -118,6 +118,12 @@ test-integration: secrets ## Integration tests only
 	if [ $$code -ne 0 ]; then $(TEST) logs --no-log-prefix migrate; fi; \
 	$(TEST) down --volumes --remove-orphans >/dev/null 2>&1; exit $$code
 
+.PHONY: jev-smoke
+jev-smoke: secrets ## Live Jev smoke test against TypeSafe (needs secrets/typesafe_api_key; costs a few tokens)
+	$(TEST) run --rm --build --no-deps -e JEV_SMOKE=true -e TYPESAFE_API_KEY_FILE=/run/secrets/typesafe_api_key \
+	  -v "$(CURDIR)/secrets/typesafe_api_key:/run/secrets/typesafe_api_key:ro" \
+	  test pnpm exec vitest run --project unit packages/decisions/src/live.smoke.test.ts
+
 .PHONY: test-unit
 test-unit: secrets ## Unit tests only (no database)
 	$(TOOLS) pnpm test:unit

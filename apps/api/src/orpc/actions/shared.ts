@@ -73,3 +73,12 @@ export async function paymentFor(tx: Tx, transactionId: string, version: number,
   if (lock && payment.version !== version) throw new ActionError('STALE_STATE', 'the transaction changed', { currentVersion: payment.version })
   return payment
 }
+
+/** What an agent action touches, as Jev sees it (§8.3): payer-typed text stays labelled untrusted. */
+export async function paymentRecords(tx: Tx, transactionId: string) {
+  const [row] = await tx
+    .select({ receipt: mpesaTransaction.receiptNumber, reference: mpesaTransaction.billRefNumber })
+    .from(mpesaTransaction)
+    .where(eq(mpesaTransaction.id, transactionId))
+  return row ? { payment: { receipt: row.receipt, untrusted_payment_reference: row.reference } } : null
+}

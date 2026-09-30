@@ -1,5 +1,5 @@
 {
-  "name": "@paysync/guard",
+  "name": "@paysync/decisions",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,8 +14,7 @@
     "!dist/**/*.test.*"
   ],
   "dependencies": {
-    "@paysync/contract": "workspace:*",
-    "@paysync/decisions": "workspace:*"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "vitest": "4.1.11"

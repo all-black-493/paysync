@@ -10,6 +10,7 @@
   "dependencies": {
     "@paysync/daraja": "workspace:*",
     "@paysync/db": "workspace:*",
+    "@paysync/decisions": "workspace:*",
     "@paysync/ingest": "workspace:*",
     "@paysync/matching": "workspace:*",
     "@paysync/platform": "workspace:*",

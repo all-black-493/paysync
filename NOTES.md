@@ -5,6 +5,54 @@ Newest milestone first.
 
 ---
 
+## M6: Jev — built 2026-09-30; live smoke test waits for a TypeSafe key
+
+### Done-when evidence
+
+"Mocked-Jev tests cover all threshold branches; one live smoke test passes behind a flag."
+
+| Check | How | Result |
+|---|---|---|
+| Jev client | `packages/decisions/src/decisions.test.ts`: request shape (pinned model, bearer key, state, questions), strict answer parsing (unknown choice, missing answer, wrong type, out-of-range value, non-JSON → `invalid_response`), 401/429/422/529/500 named, timeout | pass |
+| Matching thresholds | `packages/matching/src/jev-tier.test.ts`: when Jev is asked (no match or several, with a reference), candidate pre-filter (open, due left, date window, closest amount then date, cap); ≥ 0.90 auto-match incl. boundary; 0.50–0.90 suggest incl. boundaries; < 0.50, none of these, injection > 0.20 (0.20 itself allowed) keep the exception; gone/closed/out-of-window candidate never matched; partial/over still wait; property (2 000 runs): a Jev match never exceeds what is available or due, never goes to a candidate it was not offered, never below 0.90 or above 0.20 injection | pass |
+| Matching job | `apps/worker/src/jev-match.int.test.ts` (real Postgres, fake Jev): auto-match stored as `jev` with confidence and the full distribution; suggestion becomes `low_confidence` with the candidate and Jev's answer; injected reference not matched; confident pick with the wrong amount → `partial_payment`; timeout/unavailable/invalid/unauthorized → deterministic `no_match`; payment changed while Jev answered → answer dropped, deterministic tiers decide | pass |
+| Guard thresholds | `packages/guard/src/decide.test.ts`: asked only for agent calls that change something; satisfied → allow; injection > 0.2 blocks (even destructive and money), = 0.2 does not; scope > 0.3 → approval, = 0.3 not; any intent but `matches_request`, or confidence < 0.8 → approval, 0.8 not; no answer → approval; destructive/money keep their approvals with Jev's doubts added; Jev never loosens a deterministic block or doubt | pass |
+| Guard wiring | `apps/api/src/jev-guard.int.test.ts` (real Postgres, fake Jev, agent surface): allowed call audited with Jev's answers and the agent session id; state carries the person's request and the payer reference as untrusted; injection → `BLOCKED` audited; scope/intent/confidence → `APPROVAL_REQUIRED`; a 5 s Jev answered as timeout at 800 ms (call returns in < 3 s) → approval; web callers never judged | pass |
+| Live smoke | `make jev-smoke` (`packages/decisions/src/live.smoke.test.ts`, skipped unless `JEV_SMOKE=true` and a key file): picks the right invoice for a messy reference on the pinned model, flags injected text, judges a matching action | **not run: no TypeSafe key yet** |
+| Suite | `make test` 330 passed (3 live tests skipped); lint, typecheck, verify-images (23), smoke, scan | green |
+
+### What exists
+
+- `@paysync/decisions` (the only code that calls TypeSafe, §3.4): `createJevClient` over plain HTTP (`POST https://api.typesafe.ai/v1/systemone`, fetch + zod; no SDK dependency), `JevError` kinds, `JEV_NOT_CONFIGURED`, `jevFromConfig`; `chooseCandidate` (Choice over `option_n` keys + `none_of_these`, plus an injection Noul, one call); `judgeAction` (intent Choice, injection Noul, scope Noul, one call); `fakeJev` for tests.
+- Matching tier 3 (`packages/matching/src/jev-tier.ts`): `needsJev`, `jevCandidates`, `afterJev`; the amount rule is shared by every tier (`settle`). Thresholds in `DEFAULT_MATCH_POLICY.jev` (auto 0.90, suggest 0.50, injection 0.20, 20 candidates, 5 s).
+- Worker `match_transaction`: deterministic tiers in one serializable transaction; if Jev is needed, the transaction closes, Jev is asked, and a second serializable transaction re-reads the payment and candidates before applying §7.3 (§6B.5). Jev matches keep `confidence` and `jev_probabilities` (keyed by expected payment id); suggestions and refusals keep Jev's answer in the exception details.
+- Guard step 7: `packages/guard` `needsJudgement`, `injectionFound`, `judgementDoubts`; thresholds in `DEFAULT_GUARD_POLICY.jev` (injection 0.2, scope 0.3, intent 0.8, 800 ms). The API asks after its read transaction closes (`guarding/judge.ts`); Jev's answers, latency or failure go into the audit event and pending-action reasons; the agent session id is stored on audit events.
+- Config: `JEV_ENABLED` (default false) and the `typesafe_api_key` secret file (read only when enabled) for api and worker. The api joined the `egress` network so the guard can reach TypeSafe.
+
+### Decisions
+
+- **Pinned model `jev-1.13.0`** (TypeSafe: aliases move and change answers; thresholds are calibrated per version).
+- **Jev only reads references.** Its known weak spots (numbers, dates, adversarial text: docs "Jev 1.13 jaggedness") are handled in code: candidates are pre-filtered by amount and date, the chosen one is re-checked, amounts are always computed by code, payer text is labelled `untrusted_*`, and no amounts, dates, names or phone numbers are sent.
+- **Jev only tightens.** In matching it can move a payment to a person or, at ≥ 0.90 with every check passing, into the normal amount rule; in the guard it can block or require approval, never allow what the static guard would not.
+- **Judged callers:** agent surfaces (AI SDK, MCP) for anything but `approval: 'never'`. People (web) and integrator keys (REST) keep the static guard. The person's request reaches Jev through the agent surface (M7/M8); without it Jev sees "(not provided)", which reads as unclear → approval.
+- **Fail closed:** no key, timeout, 4xx/5xx or a malformed answer → matching keeps the deterministic exception; the guard asks a person.
+
+### Doc discrepancies
+
+- The API reference sends `"model": "jev-latest"`; the Noul page's example sends `"selectedModels": ["jev-latest"]`. We send `model` (the reference); the live smoke test settles it.
+- The docs give no state size limit beyond "32k tokens for state"; we send at most 20 candidates.
+
+### Owner actions
+
+- Put the TypeSafe key in `secrets/typesafe_api_key`, then `make jev-smoke` (costs a few tokens). To use Jev in the running stack, also set `JEV_ENABLED=true` in `.env` and `make up`.
+- [VERIFY] TypeSafe's data handling and retention terms before production data (§12); we send references and invoice descriptions only.
+
+### Next step
+
+- M7 (AI SDK surface) waits for the owner's go-ahead.
+
+---
+
 ## Custom roles and selected permissions — 2026-09-30
 
 Owner request: admins build their own roles from chosen permissions instead of only the five fixed ones.

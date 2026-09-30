@@ -7,16 +7,5 @@
   },
   "include": [
     "src"
-  ],
-  "references": [
-    {
-      "path": "../db"
-    },
-    {
-      "path": "../test-utils"
-    },
-    {
-      "path": "../decisions"
-    }
   ]
 }

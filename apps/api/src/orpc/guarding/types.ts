@@ -1,4 +1,5 @@
 import type { Db, Tx } from '@paysync/db'
+import type { Jev } from '@paysync/decisions'
 import type { GuardPolicy } from '@paysync/guard'
 import type { z } from 'zod'
 import type { Caller, Surface } from '../base.js'
@@ -47,6 +48,8 @@ export interface GuardedAction<I extends GuardedInput, R> {
   readonly result: z.ZodType<R>
   readonly isolation?: 'serializable'
   summary(tx: Tx, input: I): Promise<string>
+  /** The records an agent's action touches, shown to Jev as data (§8.3 step 7). */
+  records?(tx: Tx, input: I): Promise<unknown>
   checks?(tx: Tx, input: I, caller: Caller, policy: GuardPolicy): Promise<Checks>
   /** The budget this request would exceed, or null. */
   overBudget?(tx: Tx, input: I, policy: GuardPolicy): Promise<BudgetUse | null>
@@ -78,4 +81,12 @@ export interface GuardContext {
   readonly caller: Caller
   readonly surface: Surface
   readonly policy?: GuardPolicy
+  readonly jev: Jev
+  /** Set by the agent surfaces (M7/M8): the session and what the person asked their agent to do. */
+  readonly agent?: AgentSession
+}
+
+export interface AgentSession {
+  readonly sessionId: string | null
+  readonly userRequest: string | null
 }

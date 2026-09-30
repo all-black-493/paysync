@@ -39,6 +39,9 @@
     },
     {
       "path": "../../packages/audit"
+    },
+    {
+      "path": "../../packages/decisions"
     }
   ]
 }

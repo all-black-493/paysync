@@ -19,6 +19,7 @@
     "@paysync/contract": "workspace:*",
     "@paysync/daraja": "workspace:*",
     "@paysync/db": "workspace:*",
+    "@paysync/decisions": "workspace:*",
     "@paysync/guard": "workspace:*",
     "@paysync/ingest": "workspace:*",
     "@paysync/matching": "workspace:*",

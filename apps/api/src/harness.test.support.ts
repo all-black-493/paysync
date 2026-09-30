@@ -4,6 +4,7 @@ import type { RoleName } from '@paysync/auth'
 import { createAuth, type Auth } from './auth.js'
 import type { Contract } from '@paysync/contract'
 import { createDb, loadMigrations, type Db } from '@paysync/db'
+import type { Jev } from '@paysync/decisions'
 import { closeServer, createLogger, createSealer, listen } from '@paysync/platform'
 import type { TestDatabase } from '@paysync/test-utils'
 import { createORPCClient } from '@orpc/client'
@@ -23,7 +24,7 @@ export interface TestApi extends ApiServer {
   close(): Promise<void>
 }
 
-export async function startTestApi(database: TestDatabase): Promise<TestApi> {
+export async function startTestApi(database: TestDatabase, options: { readonly jev?: Jev } = {}): Promise<TestApi> {
   const pool = database.pool('app')
   const db = createDb(pool)
   const auth = createAuth({ db, secret: randomBytes(32).toString('hex'), baseURL: PUBLIC_URL })
@@ -31,6 +32,7 @@ export async function startTestApi(database: TestDatabase): Promise<TestApi> {
     pool,
     db,
     auth,
+    ...(options.jev ? { jev: options.jev } : {}),
     migrations: loadMigrations(),
     logger: createLogger({ service: 'test', level: 'error' }),
     publicUrl: PUBLIC_URL,

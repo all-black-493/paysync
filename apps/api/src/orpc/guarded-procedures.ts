@@ -1,12 +1,13 @@
 import { confirmMatch, requestReversal, unmatch, voidExpected, writeOffVariance } from './actions/index.js'
-import { authed, type Caller, type Surface } from './base.js'
+import { authed, type Caller, type InitialContext } from './base.js'
 import { runGuarded, type GuardContext } from './guarding/index.js'
-import type { Db } from '@paysync/db'
 
-const guardContext = (context: { db: Db; caller: Caller; surface: Surface }): GuardContext => ({
+const guardContext = (context: InitialContext & { caller: Caller }): GuardContext => ({
   db: context.db,
   caller: context.caller,
   surface: context.surface,
+  jev: context.jev,
+  ...(context.agent ? { agent: context.agent } : {}),
 })
 
 export const matchesConfirm = authed.matches.confirm.handler(({ context, input, errors }) =>
