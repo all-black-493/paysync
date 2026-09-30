@@ -6,7 +6,7 @@ export const authClient = createAuthClient({
   baseURL: typeof window === 'undefined' ? 'http://localhost' : window.location.origin,
   basePath: '/api/auth',
   // The code step is shown in place (sign-in and step-up), not on a separate page.
-  plugins: [organizationClient({ ac, roles }), twoFactorClient()],
+  plugins: [organizationClient({ ac, roles, dynamicAccessControl: { enabled: true } }), twoFactorClient()],
 })
 
 /** True when a password sign-in still needs the TOTP code. */

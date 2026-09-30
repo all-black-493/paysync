@@ -179,3 +179,47 @@ input[aria-invalid='true'] {
 .form-message[data-tone='info'] {
   color: var(--ink-quiet);
 }
+
+.permission-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-5) var(--space-8);
+}
+
+.permission-group {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.permission-group legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+
+.check {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--navy);
+  flex: none;
+}
+
+.check small {
+  display: block;
+  color: var(--ink-quiet);
+  font-size: 14px;
+}

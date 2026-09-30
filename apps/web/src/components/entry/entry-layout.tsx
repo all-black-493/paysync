@@ -15,7 +15,7 @@ export function EntryLayout({ children }: { children: ReactNode }) {
           fetchPriority="high"
         />
         <span className="wordmark">Paysync</span>
-        <p className="entry-line">Every shilling accounted for.</p>
+        {/* <p className="entry-line">Every shilling accounted for.</p> */}
       </div>
       <main className="entry-main">{children}</main>
     </div>

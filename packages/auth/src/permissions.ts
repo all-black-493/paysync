@@ -1,99 +1,66 @@
 import { createRules, type ValidateDefinition } from 'permix'
-import { parseRoles, type RoleName } from './roles.js'
+import { APP_STATEMENTS, ROLE_GRANTS, type AppEntity, type AppPermission } from './catalog.js'
+import { isRoleName, parseRoleList } from './roles.js'
 
-export type PermissionsDefinition = ValidateDefinition<{
-  transaction: ['read', 'writeOff']
-  expectedPayment: ['read', 'create', 'update', 'void']
-  exception: ['read', 'annotate', 'resolve']
-  match: ['read', 'suggest', 'confirm', 'unmatch']
-  report: ['read']
-  pendingAction: ['read']
-  reconciliation: ['run']
-  approval: ['approve']
-  reversal: ['request']
-  apiKey: ['read', 'create', 'delete']
-}>
+type Mutable<T> = { -readonly [K in keyof T]: [...(T[K] extends readonly unknown[] ? T[K] : never)] }
+
+export type PermissionsDefinition = ValidateDefinition<Mutable<typeof APP_STATEMENTS>>
 
 type Rules = ReturnType<typeof createRules<PermissionsDefinition>>
+type Table = Record<AppEntity, Record<string, boolean>>
 
-const none = {
-  transaction: { read: false, writeOff: false },
-  expectedPayment: { read: false, create: false, update: false, void: false },
-  exception: { read: false, annotate: false, resolve: false },
-  match: { read: false, suggest: false, confirm: false, unmatch: false },
-  report: { read: false },
-  pendingAction: { read: false },
-  reconciliation: { run: false },
-  approval: { approve: false },
-  reversal: { request: false },
-  apiKey: { read: false, create: false, delete: false },
+function emptyTable(): Table {
+  const table = {} as Table
+  for (const [entity, actions] of Object.entries(APP_STATEMENTS) as Array<[AppEntity, readonly string[]]>) {
+    table[entity] = Object.fromEntries(actions.map((a) => [a, false]))
+  }
+  return table
 }
 
-const viewer = createRules<PermissionsDefinition>({
-  ...none,
-  transaction: { read: true, writeOff: false },
-  expectedPayment: { read: true, create: false, update: false, void: false },
-  exception: { read: true, annotate: false, resolve: false },
-  match: { read: true, suggest: true, confirm: false, unmatch: false },
-  report: { read: true },
-  pendingAction: { read: true },
-})
+/** Permix rules granting exactly these permissions; everything else is false. */
+export function rulesFrom(permissions: Iterable<AppPermission>): Rules {
+  const table = emptyTable()
+  for (const p of permissions) {
+    const [entity, action] = p.split('.') as [AppEntity, string]
+    table[entity][action] = true
+  }
+  return createRules<PermissionsDefinition>(table as Parameters<typeof createRules<PermissionsDefinition>>[0])
+}
 
-// A clerk may request destructive actions; they go through approval (M5).
-const clerk = createRules<PermissionsDefinition>({
-  ...viewer,
-  transaction: { read: true, writeOff: true },
-  expectedPayment: { read: true, create: true, update: true, void: true },
-  exception: { read: true, annotate: true, resolve: true },
-  match: { read: true, suggest: true, confirm: true, unmatch: true },
-  reconciliation: { run: true },
-})
+export const DENY_ALL: Rules = rulesFrom([])
 
-const accountant = createRules<PermissionsDefinition>({
-  ...clerk,
-  approval: { approve: true },
-  reversal: { request: true },
-})
+/**
+ * Union of every role the member holds. Built-in roles come from code; custom
+ * roles from the organization's own definitions. Unknown roles grant nothing.
+ */
+export function rulesForMember(memberRole: string, customRoles: ReadonlyMap<string, readonly AppPermission[]> = new Map()): Rules {
+  const granted = new Set<AppPermission>()
+  for (const role of parseRoleList(memberRole)) {
+    const permissions = isRoleName(role) ? ROLE_GRANTS[role] : customRoles.get(role)
+    for (const p of permissions ?? []) granted.add(p)
+  }
+  return rulesFrom(granted)
+}
 
-const admin = createRules<PermissionsDefinition>({
-  ...accountant,
-  apiKey: { read: true, create: true, delete: true },
-})
-
-export const ROLE_RULES: Readonly<Record<RoleName, Rules>> = { viewer, clerk, accountant, admin, owner: admin }
+const READ_ONLY_KEY: readonly AppPermission[] = [
+  'transaction.read',
+  'expectedPayment.read',
+  'exception.read',
+  'match.read',
+  'report.read',
+  'pendingAction.read',
+]
 
 /**
  * Integrator API keys: read, or read plus a few writes. A key can never
  * approve, void, write off, unmatch, reverse or manage keys, under any scope.
  */
 export const INTEGRATOR_RULES = {
-  read: createRules<PermissionsDefinition>({ ...viewer, match: { read: true, suggest: false, confirm: false, unmatch: false } }),
-  write: createRules<PermissionsDefinition>({
-    ...viewer,
-    match: { read: true, suggest: false, confirm: false, unmatch: false },
-    expectedPayment: { read: true, create: true, update: true, void: false },
-    exception: { read: true, annotate: true, resolve: false },
-  }),
+  read: rulesFrom(READ_ONLY_KEY),
+  write: rulesFrom([...READ_ONLY_KEY, 'expectedPayment.create', 'expectedPayment.update', 'exception.annotate']),
 } as const
 
 export type IntegratorScope = keyof typeof INTEGRATOR_RULES
-
-export const DENY_ALL: Rules = createRules<PermissionsDefinition>(none)
-
-/** Union of the rules of every role the member holds; unknown roles grant nothing. */
-export function rulesForMember(memberRole: string): Rules {
-  const granted = parseRoles(memberRole).map((r) => ROLE_RULES[r])
-  const merged = structuredClone(none) as Record<string, Record<string, boolean>>
-  for (const rules of granted) {
-    for (const [entity, actions] of Object.entries(rules as Record<string, Record<string, unknown>>)) {
-      for (const [action, value] of Object.entries(actions)) {
-        const entityRules = merged[entity]
-        if (entityRules && value === true) entityRules[action] = true
-      }
-    }
-  }
-  return createRules<PermissionsDefinition>(merged as typeof none)
-}
 
 /** How a key's scope is stored in Better Auth's key record. */
 export function keyPermissionsFor(scope: IntegratorScope): Record<string, string[]> {

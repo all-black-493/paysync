@@ -7,6 +7,7 @@ import { and, asc, eq, gt, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { organization, twoFactor } from 'better-auth/plugins'
 import { ac, roles } from '@paysync/auth'
+import { TEAM_PATHS, auditTeamChange, guardTeamChange } from './auth-roles.js'
 
 export const API_KEY_CONFIG = 'integrator'
 export const API_KEY_PREFIX = 'psk_'
@@ -40,7 +41,8 @@ function authOptions(options: AuthOptions) {
       defaultCookieAttributes: { sameSite: 'lax', httpOnly: true, secure },
     },
     plugins: [
-      organization({ ac, roles, creatorRole: 'owner' }),
+      // Custom roles per organization (Better Auth checks nobody grants what they lack; auth-roles.ts adds our limits).
+      organization({ ac, roles, creatorRole: 'owner', dynamicAccessControl: { enabled: true, maximumRolesPerOrganization: 20 } }),
       // TOTP second factor; approvers must have it (§6C.4).
       twoFactor({ issuer: 'Paysync' }),
       apiKey([
@@ -59,6 +61,10 @@ function authOptions(options: AuthOptions) {
       // Invite-only: an HTTP sign-up needs a pending invitation for that email.
       // Trusted server code (seed, tests) calls auth.api directly and has no request.
       before: createAuthMiddleware(async (ctx) => {
+        if (TEAM_PATHS.has(ctx.path)) {
+          await guardTeamChange(options.db, ctx)
+          return
+        }
         if (ctx.path !== '/sign-up/email' || !ctx.request) return
         const email = SignUpBody.safeParse(ctx.body).data?.email ?? ''
         const [invited] = await options.db
@@ -73,6 +79,9 @@ function authOptions(options: AuthOptions) {
           )
           .limit(1)
         if (!invited) throw new APIError('FORBIDDEN', { message: 'Sign-up is by invitation only.' })
+      }),
+      after: createAuthMiddleware(async (ctx) => {
+        if (TEAM_PATHS.has(ctx.path)) await auditTeamChange(options.db, ctx)
       }),
     },
     databaseHooks: {

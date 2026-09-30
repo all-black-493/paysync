@@ -120,4 +120,15 @@ async function request(api: TestApi, auth: Record<string, string>, method: strin
   return { status: res.status, body: text === '' ? undefined : (JSON.parse(text) as unknown) }
 }
 
+/** A Better Auth route called like the browser does, so its hooks run. */
+export async function authPost(api: TestApi, cookie: string, path: string, body: unknown) {
+  const res = await fetch(`${api.baseUrl}/api/auth${path}`, {
+    method: 'POST',
+    headers: { origin: PUBLIC_URL, cookie, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const text = await res.text()
+  return { status: res.status, body: text === '' ? undefined : (JSON.parse(text) as unknown) }
+}
+
 export const key = (label: string) => `${label}-${randomBytes(6).toString('hex')}`

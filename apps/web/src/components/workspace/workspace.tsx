@@ -22,21 +22,32 @@ type View = (typeof VIEWS)[number]
 
 export function Workspace({ me }: { me: MeOutput }) {
   const permix = useMemo(() => permissionsFrom(me.permissions), [me.permissions])
-  const canSettings = permix.check('apiKey.read')
+  // Custom roles can leave out whole areas; show only what this person may read.
+  const visible: Record<View, boolean> = {
+    exceptions: permix.check('exception.read'),
+    approvals: permix.check('pendingAction.read'),
+    expected: permix.check('expectedPayment.read'),
+    transactions: permix.check('transaction.read'),
+    security: true,
+    settings: permix.check('apiKey.read'),
+  }
+  const seesTotals = permix.check('report.read')
   const [requested, setView] = useUrlParam<View>('view', VIEWS, 'exceptions')
-  const view = requested === 'settings' && !canSettings ? 'exceptions' : requested
 
-  const summary = useQuery(dailySummaryQuery())
-  const waiting = useQuery(orpc.pendingActions.list.queryOptions({ input: { status: 'pending' } }))
+  const summary = useQuery({ ...dailySummaryQuery(), enabled: seesTotals })
+  const waiting = useQuery({ ...orpc.pendingActions.list.queryOptions({ input: { status: 'pending' } }), enabled: visible.approvals })
 
-  const tabs: ReadonlyArray<TabItem<View>> = [
-    { id: 'exceptions', label: 'Exceptions', count: summary.data?.openExceptions },
-    { id: 'approvals', label: 'Approvals', count: waiting.data?.items.length },
-    { id: 'expected', label: 'Expected payments' },
-    { id: 'transactions', label: 'Transactions' },
-    { id: 'security', label: 'Security' },
-    ...(canSettings ? [{ id: 'settings' as const, label: 'Settings' }] : []),
-  ]
+  const tabs = (
+    [
+      { id: 'exceptions', label: 'Exceptions', count: summary.data?.openExceptions },
+      { id: 'approvals', label: 'Approvals', count: waiting.data?.items.length },
+      { id: 'expected', label: 'Expected payments' },
+      { id: 'transactions', label: 'Transactions' },
+      { id: 'security', label: 'Security' },
+      { id: 'settings', label: 'Settings' },
+    ] satisfies ReadonlyArray<TabItem<View>>
+  ).filter((t) => visible[t.id])
+  const view: View = visible[requested] ? requested : (tabs[0]?.id ?? 'security')
   const ids = tabIds(view)
   const can: DetailPermissions = {
     exceptions: { annotate: permix.check('exception.annotate'), resolve: permix.check('exception.resolve'), confirm: permix.check('match.confirm') },
@@ -50,7 +61,7 @@ export function Workspace({ me }: { me: MeOutput }) {
       <div className="field-band">
         <div className="field-inner">
           <Masthead me={me} />
-          <Console />
+          {seesTotals ? <Console /> : null}
         </div>
       </div>
       <nav className="tabs" aria-label="Workspace">
@@ -70,7 +81,7 @@ export function Workspace({ me }: { me: MeOutput }) {
           <TransactionsPanel can={can.transactions} />
         ) : null}
         {view === 'security' ? <SecurityPanel /> : null}
-        {view === 'settings' ? <SettingsPanel /> : null}
+        {view === 'settings' ? <SettingsPanel viewerId={me.actor.id} /> : null}
       </main>
       <DetailDrawer can={can} viewer={viewer} />
     </>

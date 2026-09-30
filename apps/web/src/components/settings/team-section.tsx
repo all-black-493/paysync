@@ -1,18 +1,12 @@
 'use client'
 
-import type { RoleName } from '@paysync/auth'
 import { useQuery } from '@tanstack/react-query'
 import { useState, type SubmitEvent } from 'react'
 import { authClient } from '../../lib/auth-client'
 import { field } from '../../lib/format'
 import { FormMessage, type Message } from '../ui/form-message'
 import { Time } from '../ui/time'
-
-const INVITABLE_ROLES: readonly RoleName[] = ['viewer', 'clerk', 'accountant', 'admin']
-
-function isRole(value: string): value is RoleName {
-  return (INVITABLE_ROLES as readonly string[]).includes(value)
-}
+import { RoleOptions } from './role-options'
 
 export function TeamSection() {
   const [message, setMessage] = useState<Message | null>(null)
@@ -28,7 +22,6 @@ export function TeamSection() {
     const formElement = event.currentTarget
     const form = new FormData(formElement)
     const role = field(form, 'role')
-    if (!isRole(role)) return
     const { data, error } = await authClient.organization.inviteMember({ email: field(form, 'email'), role })
     if (error) {
       setMessage({ tone: 'error', text: error.message ?? 'Could not create the invitation.' })
@@ -56,11 +49,7 @@ export function TeamSection() {
             <label className="field">
               <span>Role</span>
               <select name="role" defaultValue="clerk">
-                {INVITABLE_ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r.charAt(0).toUpperCase() + r.slice(1)}
-                  </option>
-                ))}
+                <RoleOptions />
               </select>
             </label>
             <button type="submit" className="btn btn-primary">

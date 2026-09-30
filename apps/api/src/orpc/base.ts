@@ -1,4 +1,4 @@
-import { INTEGRATOR_RULES, rulesForMember, scopeOf } from '@paysync/auth'
+import { INTEGRATOR_RULES, customRolePermissions, isRoleName, parseRoleList, rulesForMember, scopeOf, type AppPermission } from '@paysync/auth'
 import { API_KEY_CONFIG, type Auth } from '../auth.js'
 import { contract } from '@paysync/contract'
 import { schema, type Db } from '@paysync/db'
@@ -8,7 +8,7 @@ import type {
   RequestHeadersHandlerPluginContext,
   ResponseHeadersHandlerPluginContext,
 } from '@orpc/server/plugins'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { permissionFor } from './permissions.js'
 import { permix } from './permix.js'
 
@@ -101,8 +101,27 @@ async function sessionCaller(context: InitialContext): Promise<Resolved> {
         twoFactorEnabled: session.user.twoFactorEnabled === true,
       },
     },
-    rules: rulesForMember(member.role),
+    rules: rulesForMember(member.role, await customRoles(context.db, orgId, member.role)),
   }
+}
+
+function parsedPermission(stored: string): unknown {
+  try {
+    return JSON.parse(stored) as unknown
+  } catch {
+    return null
+  }
+}
+
+/** The organization's own roles this member holds; a malformed or missing one grants nothing. */
+async function customRoles(db: InitialContext['db'], orgId: string, memberRole: string): Promise<Map<string, AppPermission[]>> {
+  const names = parseRoleList(memberRole).filter((r) => !isRoleName(r))
+  if (names.length === 0) return new Map()
+  const rows = await db
+    .select({ role: schema.organizationRole.role, permission: schema.organizationRole.permission })
+    .from(schema.organizationRole)
+    .where(and(eq(schema.organizationRole.organizationId, orgId), inArray(schema.organizationRole.role, names)))
+  return new Map(rows.map((r) => [r.role, customRolePermissions(parsedPermission(r.permission))]))
 }
 
 const requireCaller = os.middleware(async ({ context, path, next }) => {

@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef } from 'react'
 import { authClient } from '../../lib/auth-client'
+import { roleLabel } from '../../lib/labels'
 import { Chevron } from '../ui/chevron'
 
 export function Masthead({ me }: { me: MeOutput }) {
@@ -14,7 +15,7 @@ export function Masthead({ me }: { me: MeOutput }) {
         <span className="wordmark">Paysync</span>
         <h1>{me.organization.name}</h1>
       </div>
-      <AccountMenu name={me.actor.name} role={me.role} />
+      <AccountMenu name={me.actor.name} role={roleLabel(me.role)} />
     </header>
   )
 }

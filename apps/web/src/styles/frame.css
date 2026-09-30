@@ -488,3 +488,9 @@
     content: none;
   }
 }
+
+/* The section rule already opens the table under it. */
+.section-head + .ledger,
+.section-head + .stack-lg > .ledger:first-child {
+  border-top: 0;
+}

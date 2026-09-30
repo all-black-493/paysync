@@ -1,6 +1,8 @@
 import { createPermix } from 'permix'
 import { describe, expect, it } from 'vitest'
+import { customRolePermissions, PERMISSION_CATALOG, ROLE_GRANTS, toStatements, type AppPermission } from './catalog.js'
 import { INTEGRATOR_RULES, keyPermissionsFor, rulesForMember, scopeOf, type PermissionsDefinition } from './permissions.js'
+import { isValidCustomRoleName } from './roles.js'
 
 function permixWith(rules: Parameters<ReturnType<typeof createPermix<PermissionsDefinition>>['setup']>[0]) {
   const permix = createPermix<PermissionsDefinition>()
@@ -56,6 +58,46 @@ describe('role rules', () => {
     const nothing = permixWith(rulesForMember('member,superuser'))
     expect(nothing.check('expectedPayment.read')).toBe(false)
     expect(nothing.check('~any')).toBe(false)
+  })
+})
+
+describe('custom roles', () => {
+  const collector: readonly AppPermission[] = ['transaction.read', 'exception.read', 'exception.annotate']
+  const roles = new Map([['Rent collector', collector]])
+
+  it('grant exactly their permissions, alone or with a built-in role', () => {
+    const p = permixWith(rulesForMember('Rent collector', roles))
+    expect(p.check('exception.annotate')).toBe(true)
+    expect(p.check('exception.resolve')).toBe(false)
+    expect(p.check('approval.approve')).toBe(false)
+    expect(permixWith(rulesForMember('viewer,Rent collector', roles)).check('report.read')).toBe(true)
+  })
+
+  it('a role the organization does not define grants nothing', () => {
+    expect(permixWith(rulesForMember('Rent collector')).check('transaction.read')).toBe(false)
+  })
+
+  it('never hold team, role or key management, whatever is stored', () => {
+    const stored = { transaction: ['read'], apiKey: ['create'], member: ['update'], ac: ['create'], organization: ['update'], exception: ['annotate', 'explode'] }
+    expect(customRolePermissions(stored)).toEqual(['transaction.read', 'exception.annotate'])
+    expect(customRolePermissions('not json')).toEqual([])
+  })
+
+  it('round-trip through the stored statement shape', () => {
+    expect(customRolePermissions(toStatements(collector))).toEqual(collector)
+  })
+
+  it('offer every permission a custom role may hold, and nothing else', () => {
+    const offered = PERMISSION_CATALOG.map((p) => p.permission)
+    expect(customRolePermissions(toStatements(offered)).sort()).toEqual([...offered].sort())
+    expect(offered).not.toContain('apiKey.create')
+    expect(new Set(offered).size).toBe(offered.length)
+    for (const p of ROLE_GRANTS.accountant) if (!p.startsWith('apiKey.')) expect(offered).toContain(p)
+  })
+
+  it('need a readable name that is not a built-in role', () => {
+    for (const ok of ['Rent collector', 'Front-desk', 'Auditor 2']) expect(isValidCustomRoleName(ok), ok).toBe(true)
+    for (const bad of ['owner', 'Admin', 'a', 'x,y', 'role;drop', ' spaced', 'trailing-', 'n'.repeat(41)]) expect(isValidCustomRoleName(bad), bad).toBe(false)
   })
 })
 

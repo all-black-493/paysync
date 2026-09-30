@@ -5,6 +5,21 @@ Newest milestone first.
 
 ---
 
+## Custom roles and selected permissions — 2026-09-30
+
+Owner request: admins build their own roles from chosen permissions instead of only the five fixed ones.
+
+- **Storage:** Better Auth's dynamic access control (organization plugin, `organizationRole` table, migration `20260930015613_custom_roles.sql` with a case-insensitive unique name per organization). Better Auth knows our application permissions (`APP_STATEMENTS` in `packages/auth/src/catalog.ts`, the single source for Permix rules, Better Auth roles and the UI catalog), so invitations and member role changes accept custom roles natively, and its own check applies: nobody grants a permission they do not hold.
+- **Enforcement stays in Permix:** the API resolves built-in roles from code and custom roles from the organization's rows on every request; unknown, deleted or malformed roles grant nothing.
+- **Limits we add** (`apps/api/src/auth-roles.ts`, Better Auth before-hook): custom roles hold reconciliation work only, never team, role, invitation or API-key management (so a custom role cannot be used to escalate); names are 3–40 readable characters and never a built-in name; roles cannot be renamed (members hold roles by name); nobody changes their own role. Better Auth itself refuses to delete a role someone still holds and lowercases role names (the UI capitalizes them for display).
+- **Approving through a custom role** is allowed when the owner grants it, and every M5 safeguard still applies: TOTP, step-up after 10 minutes, never your own request, two approvers for money (tested).
+- **Audit:** every role create/update/delete, member role change, invitation and removal writes `team.*` to `audit.event` (after-hook), including refusals.
+- **Web:** Settings has Members (change someone's role) and Roles (built-ins described; create, edit or delete custom roles with a grouped permission checklist and cautions on requests and approving); invitations offer custom roles. Tabs and today's totals now show only what the person may read, so a narrow role sees a narrow workspace.
+- **Tests:** unit (custom grants exact, management never held, catalog complete, names) and `apps/api/src/roles.int.test.ts` (create/assign/use, update applies next request, management and rename refused, clerk cannot create, no self role change, custom approver still needs TOTP, delete refused while held, audit). Suite: 296 passed.
+- **Dev data:** a "Rent collector" role now exists in Acme Rentals and Kamau Viewer holds it (made through the UI while verifying). The owner's two-factor flag was switched off for that session and restored.
+
+---
+
 ## Web: KICC entry photo and clickable records — 2026-09-30
 
 - Sign-in, invitation and organization-picker screens show the owner's KICC photograph under the navy veil. Source: owner-supplied `apps/web/src/public/image.png` (3648×5472, 36 MB; git- and docker-ignored). Shipped as WebP encoded with ffmpeg: `apps/web/public/images/kicc-800.webp` (97 KB) and `kicc-1400.webp` (263 KB), chosen with `srcset`.

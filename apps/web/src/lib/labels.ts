@@ -66,3 +66,20 @@ export function humanize(value: string): string {
   const text = value.replaceAll('_', ' ')
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
+
+export const BUILT_IN_ROLES: ReadonlyArray<readonly [string, string]> = [
+  ['viewer', 'Sees everything, changes nothing.'],
+  ['clerk', 'Works the queue; requests voids, write-offs and undone matches.'],
+  ['accountant', 'Clerk, plus approves requests and asks for reversals.'],
+  ['admin', 'Accountant, plus team, roles and API keys.'],
+  ['owner', 'Admin who created the organization.'],
+]
+
+/** Better Auth stores role names in lower case; show them with a capital. */
+export function roleLabel(name: string): string {
+  return name
+    .split(',')
+    .map((r) => r.trim())
+    .map((r) => r.charAt(0).toUpperCase() + r.slice(1))
+    .join(', ')
+}
