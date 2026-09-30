@@ -12,7 +12,7 @@
 		respond "ok" 200
 	}
 
-	@api path /api /api/* /mcp /mcp/* /hooks/*
+	@api path /api /api/* /mcp /mcp/* /hooks/* /.well-known/oauth-protected-resource* /.well-known/oauth-authorization-server* /.well-known/openid-configuration*
 	handle @api {
 		reverse_proxy api:3000
 	}

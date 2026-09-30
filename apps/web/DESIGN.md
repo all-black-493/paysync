@@ -229,6 +229,9 @@ Any record row (exception, transaction, expected payment, request) opens its det
 ### Assistant panel
 The in-app assistant opens from an **Assistant** button on the navy field into the same right-hand panel as record details. Its content is AI Elements (shadcn/ui) themed onto these tokens: mint for the person's messages, the Tool block as a quiet collapsible with its status, Confirmation for chat-level go-ahead on risky tools, square suggestion chips, and a navy send button. Tailwind builds only for these components, without preflight.
 
+### Connecting an app
+The consent screen uses the entry layout (KICC field, form column): a serif question naming the app, one quiet line with where the app is published (mono), the organization and the person, then what it may do as ruled rows, Paysync's own permissions first. Deny is a plain button, Allow the navy one. Connected apps sit under Security as a ledger table with a red-outlined Disconnect.
+
 ### Records (signature)
 A three-column row: status (square marker and word), body (title, quiet meta with relative time, optional note), actions right-aligned. An open task (match, note, close, a guarded request) opens a Mint Paper workbench under the body.
 

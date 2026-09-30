@@ -1,9 +1,9 @@
 import { createToolFactory } from '@orpc/ai-sdk'
 import { agentProcedures, approvalPolicyOf, type AgentMeta } from '@paysync/contract'
 import { tool, type ToolApprovalStatus, type ToolSet } from 'ai'
-import { z } from 'zod'
 import type { InitialContext } from '../orpc/base.js'
 import { router } from '../orpc/router.js'
+import { descriptionOf } from './describe.js'
 import { toolOutcome } from './outcome.js'
 
 /** Who the agent acts for and what they asked, for one conversation. */
@@ -22,14 +22,6 @@ export interface AgentToolSet {
   /** Chat-level confirmation (AI SDK human in the loop) before a destructive or money tool even files its request. */
   readonly toolApproval: Record<string, ToolApprovalStatus>
   readonly meta: ReadonlyMap<string, AgentMeta>
-}
-
-const OpenApiMeta = z.object({ '~openapi': z.object({ summary: z.string().optional(), description: z.string().optional() }).optional() })
-
-function descriptionOf(meta: Readonly<Record<PropertyKey, unknown>>): string {
-  const parsed = OpenApiMeta.safeParse(meta)
-  const route = parsed.success ? parsed.data['~openapi'] : undefined
-  return [route?.summary, route?.description].filter(Boolean).join('. ')
 }
 
 type RouterProcedure = Parameters<ReturnType<typeof createToolFactory<InitialContext>>>[0]

@@ -10,7 +10,11 @@
   "dependencies": {
     "@ai-sdk/openai": "4.0.82",
     "@better-auth/api-key": "1.7.6",
+    "@better-auth/cimd": "1.7.6",
     "@better-auth/drizzle-adapter": "1.7.6",
+    "@better-auth/mcp": "1.7.6",
+    "@better-auth/oauth-provider": "1.7.6",
+    "@modelcontextprotocol/server": "2.2.0",
     "@orpc/ai-sdk": "2.0.0-beta.40",
     "@orpc/contract": "2.0.0-beta.40",
     "@orpc/openapi": "2.0.0-beta.40",
@@ -25,6 +29,7 @@
     "@paysync/guard": "workspace:*",
     "@paysync/ingest": "workspace:*",
     "@paysync/matching": "workspace:*",
+    "@paysync/orpc-mcp": "workspace:*",
     "@paysync/platform": "workspace:*",
     "ai": "7.0.123",
     "better-auth": "1.7.6",
@@ -34,6 +39,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.2.0",
     "@orpc/client": "2.0.0-beta.40",
     "@paysync/test-utils": "workspace:*",
     "@types/pg": "8.23.1",

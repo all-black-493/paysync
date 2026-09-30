@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "4.0.126",
+    "@better-auth/oauth-provider": "1.7.6",
     "@orpc/client": "2.0.0-beta.40",
     "@orpc/contract": "2.0.0-beta.40",
     "@orpc/tanstack-query": "2.0.0-beta.40",

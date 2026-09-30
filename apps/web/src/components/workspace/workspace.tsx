@@ -11,6 +11,7 @@ import { AssistantDrawer } from '../assistant/assistant-drawer'
 import { DetailDrawer, type DetailPermissions } from '../detail/detail-drawer'
 import { ExceptionsPanel } from '../exceptions/exceptions-panel'
 import { ExpectedPanel } from '../expected/expected-panel'
+import { ConnectedApps } from '../security/connected-apps'
 import { SecurityPanel } from '../security/security-panel'
 import { SettingsPanel } from '../settings/settings-panel'
 import { TransactionsPanel } from '../transactions/transactions-panel'
@@ -83,7 +84,12 @@ export function Workspace({ me }: { me: MeOutput }) {
         {view === 'transactions' ? (
           <TransactionsPanel can={can.transactions} />
         ) : null}
-        {view === 'security' ? <SecurityPanel /> : null}
+        {view === 'security' ? (
+          <>
+            <SecurityPanel />
+            <ConnectedApps />
+          </>
+        ) : null}
         {view === 'settings' ? <SettingsPanel viewerId={me.actor.id} /> : null}
       </main>
       <DetailDrawer can={can} viewer={viewer} />

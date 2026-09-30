@@ -21,6 +21,8 @@ import {
 import { ZodToJsonSchemaConverter } from '@orpc/zod'
 import { toNodeHandler } from 'better-auth/node'
 import { createHookHandler, type HookOptions } from './hooks.js'
+import { createMcpEndpoint } from './mcp/endpoint.js'
+import { mcpTools } from './mcp/tools.js'
 import { router } from './orpc/router.js'
 
 export interface ApiServerDeps {
@@ -46,6 +48,12 @@ export interface ApiServer {
 }
 
 const MAX_BODY_BYTES = 1024 * 1024
+
+/** OAuth discovery documents Better Auth serves at the origin root (RFC 8414, RFC 9728, OIDC). */
+const DISCOVERY = /^\/\.well-known\/(oauth-protected-resource|oauth-authorization-server|openid-configuration)(\/|$)/
+
+/** OAuth client management stays server-side; clients register through CIMD only (§6C.5). */
+const CLIENT_ADMIN = /^\/api\/auth\/(admin\/|oauth2\/(create-client|update-client|delete-client|client\/|get-client|register))/
 const errorStatusMap = { ...COMMON_ERROR_STATUS_MAP, ...ERROR_STATUS }
 
 export function openApiGenerator() {
@@ -120,6 +128,16 @@ export function createApiServer(deps: ApiServerDeps): ApiServer {
     interceptors: [onError(logError)],
   })
   const authHandler = toNodeHandler(deps.auth)
+  const selfUrl = () => {
+    const address = server.address()
+    return typeof address === 'object' && address ? `http://127.0.0.1:${String(address.port)}` : deps.publicUrl
+  }
+  const tools = mcpTools()
+  let mcpHandler: ReturnType<typeof toNodeHandler> | undefined
+  const mcp = () =>
+    (mcpHandler ??= toNodeHandler(
+      createMcpEndpoint({ services: baseContext, publicUrl: deps.publicUrl, jwksUrl: `${selfUrl()}/api/auth/jwks`, tools }),
+    ))
   const hooks = createHookHandler({ ...deps.hooks, db: deps.db, logger: deps.logger })
 
   const baseContext = { auth: deps.auth, db: deps.db, logger: deps.logger, jev: deps.jev ?? JEV_NOT_CONFIGURED, ...(deps.assistant ? { assistant: deps.assistant } : {}) }
@@ -130,13 +148,17 @@ export function createApiServer(deps: ApiServerDeps): ApiServer {
     const path = (req.url ?? '').split('?', 1)[0] ?? ''
 
     // Keys are issued only through apiKeys.create, which fixes their permissions.
-    if (path.startsWith('/api/auth/api-key/')) {
+    if (path.startsWith('/api/auth/api-key/') || CLIENT_ADMIN.test(path)) {
       res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ status: 'not_found' }))
       return
     }
-    if (path.startsWith('/api/auth/')) {
+    if (path.startsWith('/api/auth/') || DISCOVERY.test(path)) {
       await authHandler(req, res)
+      return
+    }
+    if (path === '/mcp') {
+      await mcp()(req, res)
       return
     }
     if (path.startsWith('/api/rpc/')) {

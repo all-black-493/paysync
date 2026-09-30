@@ -1,6 +1,7 @@
 import { agentMetaOf, contract, listProcedures, type AgentMeta } from '@paysync/contract'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { mcpTools } from './mcp/tools.js'
 import { PERMISSIONS, permissionFor } from './orpc/permissions.js'
 import { generateSpec } from './server.js'
 
@@ -64,5 +65,14 @@ describe('agent tools (router enumeration, §8.1)', () => {
     }
     const list = tools.map(({ path, meta }): AgentMeta & { path: string; description: string } => ({ path, ...meta, description: description(path) }))
     await expect(`${JSON.stringify(list, null, 2)}\n`).toMatchFileSnapshot('./__snapshots__/agent-tools.json')
+  })
+})
+
+describe('MCP tools (§9.3)', () => {
+  it('matches the reviewed tools/list: names, descriptions, scopes and closed schemas (run `make snapshots` after an intended change)', async () => {
+    const list = mcpTools()
+      .map(({ name, description, annotations, requiredScopes, inputSchema }) => ({ name, description, annotations, requiredScopes, inputSchema }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    await expect(`${JSON.stringify(list, null, 2)}\n`).toMatchFileSnapshot('./__snapshots__/mcp-tools.json')
   })
 })

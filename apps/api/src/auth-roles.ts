@@ -5,7 +5,7 @@ import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { redact } from './orpc/mutate.js'
 
-type HookContext = Parameters<typeof getSessionFromCtx>[0]
+export type HookContext = Parameters<typeof getSessionFromCtx>[0]
 
 const Statements = z.record(z.string(), z.array(z.string()))
 const CreateRole = z.object({ role: z.string(), permission: Statements })
@@ -17,7 +17,7 @@ const SessionShape = z.object({
 })
 const Body = z.record(z.string(), z.unknown())
 
-async function sessionOf(ctx: HookContext): Promise<z.infer<typeof SessionShape> | null> {
+export async function sessionOf(ctx: HookContext): Promise<z.infer<typeof SessionShape> | null> {
   const parsed = SessionShape.safeParse(await getSessionFromCtx(ctx))
   return parsed.success ? parsed.data : null
 }

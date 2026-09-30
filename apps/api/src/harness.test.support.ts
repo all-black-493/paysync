@@ -13,7 +13,7 @@ import { RPCLink } from '@orpc/client/fetch'
 import type { RouterContractClient } from '@orpc/contract'
 import { createApiServer, type ApiServer } from './server.js'
 
-export const PUBLIC_URL = 'http://paysync.test'
+export const PUBLIC_URL = 'http://localhost:8080'
 export const PASSWORD = 'correct horse battery staple'
 export const CALLBACK_SECRET = 'test-callback-secret-0123456789abcdef'
 export const TEST_ENCRYPTION_KEY = randomBytes(32).toString('hex')

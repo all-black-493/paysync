@@ -5,6 +5,64 @@ Newest milestone first.
 
 ---
 
+## M8: MCP surface — done 2026-09-30
+
+### Done-when evidence
+
+"An external MCP client lists tools, works exceptions, and hits the approval gate; the wrong-audience-token test passes."
+
+| Check | How | Result |
+|---|---|---|
+| External client lists tools | `mcp.int.test.ts`: the official MCP client (`@modelcontextprotocol/client` 2.2.0, version negotiation `auto`) after a real OAuth 2.1 + PKCE flow | 21 tools, stable order, equal to the router's MCP agent procedures; no approve or key tools |
+| Works exceptions | same, plus live on the Compose stack through Caddy (`server/discover`, `list_exceptions` as the seeded clerk) | returns the clerk's Acme exceptions, marked as third-party data |
+| Approval gate | `create_expected_payment` over MCP | `waiting_for_approval`, nothing created; audit row has `surface = mcp`, the MCP client id and the user |
+| Wrong audience | token Better Auth signed for `<PUBLIC_URL>/elsewhere` | 401; the same token for `/mcp` gets past authentication |
+| Cross-org | token naming an org the person is not in | `FORBIDDEN` |
+| Consent screen + disconnect | browser on the dev stack: authorize → `/consent/` → Allow → redirect with `code`, `state`, `iss`; Security → Connected apps → Disconnect | consent gone, refresh tokens revoked, next call refused, `oauth.connect` / `oauth.disconnect` audited |
+| Suite | `make test` | 358 passed, 3 skipped (live Jev); lint, typecheck, verify-images (23), scan clean |
+
+### What exists
+
+- **`packages/orpc-mcp`** (publishable, no Paysync knowledge): `createOrpcMcpFactory` turns oRPC procedures into a stateless MCP server factory (one fresh `McpServer` per request, tools sorted by name, every call through `call(procedure, input, { context, path })` so the whole middleware stack runs); `strictJsonSchema` closes every object (`additionalProperties: false`) and caps strings that have no limit (2000). Arguments are validated by the SDK against that JSON Schema before the procedure's Zod schema runs.
+- **`apps/api/src/mcp/`:** `tools.ts` (agent procedures exposed to MCP, schemas from Zod's Standard JSON Schema, annotations from risk, required scopes), `endpoint.ts` (`POST /mcp`: Origin check → `requireMcpAuth` → `createMcpHandler(..., { legacy: 'reject' })`), `oauth.ts` (scopes, claims), `consent.ts` (audit + disconnect).
+- **Auth:** Better Auth `jwt()` + `mcp()` + `cimd()` (`@better-auth/mcp`, `@better-auth/cimd`, `@better-auth/oauth-provider` 1.7.6). Migration `20260930144754_mcp_oauth.sql` adds the OAuth tables (additive only).
+- **Caller on MCP (`base.ts`):** the verified token's `sub` + `org` claim; membership and the consent are re-checked on every call; the procedure must have agent meta exposing it to MCP, and anything beyond a plain read needs `paysync:write`. `Caller.mcpClientId` is written to every audit row.
+- **Web:** `/consent/` (app name, where it is published, organization, what each scope allows, Allow/Deny), sign-in continues an authorization, Security → **Connected apps** (list + Disconnect).
+- **Routing:** Caddy sends `/.well-known/oauth-protected-resource*`, `/.well-known/oauth-authorization-server*` and `/.well-known/openid-configuration*` to the api.
+- **Snapshots:** `__snapshots__/mcp-tools.json` (names, descriptions, annotations, scopes, input schemas); `make snapshots` rewrites it.
+
+### Decisions and deviations
+
+1. **SDK:** the official TypeScript SDK **v2** split packages (`@modelcontextprotocol/server` 2.2.0), which implement 2026-07-28; the v1 monolith `@modelcontextprotocol/sdk` does not. `legacy: 'reject'`: 2025-era (session/`initialize`) clients are refused, as the Better Auth MCP docs advise.
+2. **The organization is fixed at consent.** `postLogin.consentReferenceId` stores the session's active organization on the consent; the token carries it as the `org` claim. A client cannot name an organization (§6C.3). Switch organizations in the web app before connecting to connect another one.
+3. **Scopes:** `paysync:read` (required for `/mcp` at all), `paysync:write` (writes and anything that may need approval, enforced per tool by an SDK scope challenge **and** again in `base.ts`). No scope approves anything (§6C.5). Access tokens live 15 minutes.
+4. **Client registration:** CIMD only (`metadataProfile: 'mcp-2026-07-28'`); DCR stays off (deprecated in 2026-07-28). `clientPrivileges: () => false` and the api 404s Better Auth's client-management routes, so nobody creates, edits or lists OAuth clients over HTTP. For local testing a client can be inserted into `auth.oauth_client` + `auth.oauth_client_resource` (the dev stack has `dev-inspector`, redirect `http://127.0.0.1:6274/oauth/callback`).
+5. **Disconnect means now.** Better Auth's delete-consent only deletes the consent row. We also revoke that client's refresh tokens (before-hook) and check the consent on every MCP call, which covers JWT access tokens that are still unexpired.
+6. **Jev on MCP:** there is no "user request" text on MCP, so Jev is asked with `(not provided)`; while Jev is off every write from MCP waits for approval (fail closed, §2.6). Revisit when the TypeSafe key arrives: a low `intent` confidence will keep sending MCP writes to approval, which may be the right default for external agents.
+7. **Agent session id on MCP** (stateless protocol): calls made with one access token share `mcp_<hash of token>` in the audit log, so `replay` groups them.
+8. **Host header:** only `Origin` is validated in front of `/mcp` (DNS-rebinding protection); the endpoint is bearer-only and never reads cookies, and Caddy sets the public host.
+9. **JWT plugin:** `disableSettingJwtHeader` (sessions stay cookie-based; the JWT header on every session call was also what tied every session request to the JWKS encryption key), keys rotate every 90 days.
+
+### Doc discrepancies and facts found
+
+- **2026-07-28 is stateless:** no `initialize`, no `Mcp-Session-Id`; `server/discover` is mandatory; requests carry `_meta` `io.modelcontextprotocol/protocolVersion` and `clientCapabilities`, plus `Mcp-Method` / `Mcp-Name` headers; results carry `resultType`. The SDK does all of this; §9.3's `[VERIFY server/discover shape]` is settled by the SDK and the live probe above.
+- **Better Auth `mcp()` needs a client ↔ resource link** (`oauth_client_resource`); CIMD registration creates it, a hand-inserted client needs the row or authorize answers `invalid_target`.
+- **Better Auth issuer** is `<PUBLIC_URL>/api/auth`, so authorization-server metadata lives at `/.well-known/oauth-authorization-server/api/auth` (RFC 8414 path insertion).
+- **Rotating `BETTER_AUTH_SECRET`** makes the stored JWKS private keys undecryptable. Rotating it means clearing `auth.jwks` (all MCP tokens die; clients reconnect). Add to the ops runbook (M11).
+- **`requireMcpAuth` fetches JWKS over HTTP**; the api fetches its own `/api/auth/jwks` over loopback, since the public URL may not resolve inside the container.
+- **`auth generate`** crashes on the OAuth provider's start-up seeding (table not in the schema yet); `auth.cli.ts` ignores exactly that error.
+- **Resource URL must be HTTPS** (loopback HTTP allowed). The test harness `PUBLIC_URL` is now `http://localhost:8080`; a non-loopback `http://` `PUBLIC_URL` now fails at start-up, which is intended.
+
+### Dependencies added (pinned)
+
+api: `@modelcontextprotocol/server` 2.2.0, `@better-auth/mcp` 1.7.6, `@better-auth/cimd` 1.7.6, `@better-auth/oauth-provider` 1.7.6; dev `@modelcontextprotocol/client` 2.2.0. web: `@better-auth/oauth-provider` 1.7.6 (client plugin only). `packages/orpc-mcp`: `@modelcontextprotocol/server`, `@orpc/server`. All are the MCP SDK and Better Auth packages §6/§6C name.
+
+### Next step
+
+M9 (resumable `reconciliation.run` streams) waits for the owner's go-ahead. Open: the live Jev smoke test (`make jev-smoke`) once TypeSafe credits arrive.
+
+---
+
 ## In-app assistant (OpenAI, AI Elements) — 2026-09-30
 
 Owner decisions: OpenAI as the provider, used sparingly; the chat UI uses AI Elements, styled to match.

@@ -75,7 +75,7 @@ async function setUp(reference: string, billRef = reference) {
 }
 
 function context(surface: GuardContext['surface'], jev: FakeJev): GuardContext {
-  const caller: Caller = { kind: 'user', actorId: clerk.id, name: 'Cleo', email: clerk.email, orgId, role: 'clerk', session: null, agentSessionId: 'agent-session-1' }
+  const caller: Caller = { kind: 'user', actorId: clerk.id, name: 'Cleo', email: clerk.email, orgId, role: 'clerk', session: null, agentSessionId: 'agent-session-1', mcpClientId: null }
   return { db: api.db, caller, surface, jev, agent: { sessionId: 'agent-session-1', userRequest: 'Match the October rent payments to their invoices' } }
 }
 

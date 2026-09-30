@@ -1,6 +1,6 @@
 import { INTEGRATOR_RULES, customRolePermissions, isRoleName, parseRoleList, rulesForMember, scopeOf, type AppPermission } from '@paysync/auth'
 import { API_KEY_CONFIG, type Auth } from '../auth.js'
-import { contract } from '@paysync/contract'
+import { agentMetaOf, approvalPolicyOf, contract } from '@paysync/contract'
 import { schema, type Db } from '@paysync/db'
 import type { Logger } from '@paysync/platform'
 import { ORPCError, implement } from '@orpc/server'
@@ -11,11 +11,12 @@ import type {
 import type { Jev } from '@paysync/decisions'
 import { and, eq, inArray } from 'drizzle-orm'
 import type { Assistant } from '../agent/assistant.js'
+import { READ_SCOPE, WRITE_SCOPE, clientIdOf, scopesOf, type McpClaims } from '../mcp/oauth.js'
 import type { AgentSession } from './guarding/types.js'
 import { permissionFor } from './permissions.js'
 import { permix } from './permix.js'
 
-/** Where a call comes from. The agent surfaces (AI SDK, MCP) arrive in M7/M8. */
+/** Where a call comes from. */
 export type Surface = 'web' | 'rest' | 'ai-sdk' | 'mcp'
 
 export interface InitialContext extends RequestHeadersHandlerPluginContext, ResponseHeadersHandlerPluginContext {
@@ -29,6 +30,8 @@ export interface InitialContext extends RequestHeadersHandlerPluginContext, Resp
   readonly agent?: AgentSession
   /** The in-app assistant, when switched on. */
   readonly assistant?: Assistant
+  /** On the MCP surface: the verified access token's claims (signature, issuer, audience, expiry already checked). */
+  readonly mcp?: McpClaims
 }
 
 export interface Caller {
@@ -44,6 +47,8 @@ export interface Caller {
   readonly session: { readonly id: string; readonly createdAt: Date; readonly twoFactorEnabled: boolean } | null
   /** The agent session acting for this person (AI SDK, MCP); null for direct calls. Stored on every audit event. */
   readonly agentSessionId: string | null
+  /** The OAuth client acting for this person on MCP; null elsewhere. */
+  readonly mcpClientId: string | null
 }
 
 export const os = implement(contract).$context<InitialContext>()
@@ -76,6 +81,7 @@ async function apiKeyCaller(context: InitialContext, key: string): Promise<Resol
       role: `api_key:${scope}`,
       session: null,
       agentSessionId: null,
+      mcpClientId: null,
     },
     rules: INTEGRATOR_RULES[scope],
   }
@@ -113,9 +119,47 @@ async function sessionCaller(context: InitialContext): Promise<Resolved> {
         twoFactorEnabled: session.user.twoFactorEnabled === true,
       },
       agentSessionId: context.agent?.sessionId ?? null,
+      mcpClientId: null,
     },
     rules: rulesForMember(member.role, await customRoles(context.db, orgId, member.role)),
   }
+}
+
+/** An external agent with an OAuth token: it acts as the person who consented, in the organization they consented for. */
+async function mcpCaller(context: InitialContext, claims: McpClaims): Promise<Resolved> {
+  const [row] = await context.db
+    .select({ role: schema.member.role, name: schema.user.name, email: schema.user.email })
+    .from(schema.member)
+    .innerJoin(schema.user, eq(schema.user.id, schema.member.userId))
+    .where(and(eq(schema.member.organizationId, claims.org), eq(schema.member.userId, claims.sub)))
+  if (!row) deny('You are no longer a member of the organization this app was connected to.')
+  const [consent] = await context.db
+    .select({ id: schema.oauthConsent.id })
+    .from(schema.oauthConsent)
+    .where(and(eq(schema.oauthConsent.userId, claims.sub), eq(schema.oauthConsent.clientId, clientIdOf(claims)), eq(schema.oauthConsent.referenceId, claims.org)))
+  if (!consent) throw new ORPCError('UNAUTHORIZED', { message: 'This app was disconnected. Connect it again from the app.' })
+  return {
+    caller: {
+      kind: 'user',
+      actorId: claims.sub,
+      name: row.name,
+      email: row.email,
+      orgId: claims.org,
+      role: row.role,
+      session: null,
+      agentSessionId: context.agent?.sessionId ?? null,
+      mcpClientId: clientIdOf(claims),
+    },
+    rules: rulesForMember(row.role, await customRoles(context.db, claims.org, row.role)),
+  }
+}
+
+/** §8.3 step 1 on MCP: only agent tools, and only with the scope their risk needs. */
+function checkMcpExposure(meta: Readonly<Record<PropertyKey, unknown>>, claims: McpClaims): void {
+  const agent = agentMetaOf(meta)
+  if (!agent || !(agent.exposeTo ?? ['ai-sdk', 'mcp']).includes('mcp')) deny('Not available to connected apps.')
+  const needed = agent.risk === 'read' && approvalPolicyOf(agent) === 'never' ? READ_SCOPE : WRITE_SCOPE
+  if (!scopesOf(claims).includes(needed)) deny(`This app was not granted ${needed}.`)
 }
 
 function parsedPermission(stored: string): unknown {
@@ -137,10 +181,19 @@ async function customRoles(db: InitialContext['db'], orgId: string, memberRole: 
   return new Map(rows.map((r) => [r.role, customRolePermissions(parsedPermission(r.permission))]))
 }
 
-const requireCaller = os.middleware(async ({ context, path, next }) => {
-  const required = permissionFor(path)
+async function resolveCaller(context: InitialContext, meta: Readonly<Record<PropertyKey, unknown>>): Promise<Resolved> {
+  if (context.surface === 'mcp') {
+    if (!context.mcp) throw new ORPCError('UNAUTHORIZED')
+    checkMcpExposure(meta, context.mcp)
+    return mcpCaller(context, context.mcp)
+  }
   const key = context.reqHeaders?.get('x-api-key')
-  const { caller, rules } = key ? await apiKeyCaller(context, key) : await sessionCaller(context)
+  return key ? apiKeyCaller(context, key) : sessionCaller(context)
+}
+
+const requireCaller = os.middleware(async ({ context, path, procedure, next }) => {
+  const required = permissionFor(path)
+  const { caller, rules } = await resolveCaller(context, procedure['~orpc'].meta)
   const permissions = permix.setupContext(rules)
   if (required !== null && !permissions.permix.check(required)) {
     deny(caller.kind === 'api_key' ? 'This API key’s scope does not allow this action.' : 'Your role does not allow this action.')

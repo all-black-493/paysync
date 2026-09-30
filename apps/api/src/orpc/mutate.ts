@@ -109,6 +109,7 @@ export async function mutate<T>(options: MutationOptions<T>): Promise<Preview<T>
         surface: options.surface,
         userId: caller.actorId,
         agentSessionId: caller.agentSessionId,
+        mcpClientId: caller.mcpClientId,
         action: options.action,
         input: redact(input),
         decision: options.decision ?? 'allow',

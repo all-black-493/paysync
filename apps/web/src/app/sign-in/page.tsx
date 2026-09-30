@@ -4,10 +4,12 @@ import { useState, type SubmitEvent } from 'react'
 import { EntryLayout } from '../../components/entry/entry-layout'
 import { TwoFactorCodeForm } from '../../components/entry/two-factor-code'
 import { FormMessage, type Message } from '../../components/ui/form-message'
-import { authClient, needsSecondFactor } from '../../lib/auth-client'
+import { authClient, inOAuthFlow, needsSecondFactor } from '../../lib/auth-client'
 import { field } from '../../lib/format'
 
 function goNext() {
+  // Connecting an app: Better Auth answers the sign-in with the next step of the authorization and the client follows it.
+  if (inOAuthFlow) return
   // Full navigation so the home page starts with a fresh session store.
   const next = new URLSearchParams(window.location.search).get('next') ?? '/'
   window.location.assign(next.startsWith('/') && !next.startsWith('//') ? next : '/')

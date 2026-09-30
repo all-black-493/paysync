@@ -1,13 +1,18 @@
 import { apiKey } from '@better-auth/api-key'
+import { cimd } from '@better-auth/cimd'
+import { fetchClientMetadataResource } from '@better-auth/cimd/node'
+import { mcp } from '@better-auth/mcp'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { schema, type Db } from '@paysync/db'
 import { betterAuth, type BetterAuthOptions } from 'better-auth'
 import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { and, asc, eq, gt, sql } from 'drizzle-orm'
 import { z } from 'zod'
-import { organization, twoFactor } from 'better-auth/plugins'
+import { jwt, organization, twoFactor } from 'better-auth/plugins'
 import { ac, roles } from '@paysync/auth'
 import { TEAM_PATHS, auditTeamChange, guardTeamChange } from './auth-roles.js'
+import { CONSENT_PATH, DISCONNECT_PATH, auditConsent, revokeOnDisconnect } from './mcp/consent.js'
+import { MCP_SCOPES, mcpResourceUrl, orgForConsent } from './mcp/oauth.js'
 
 export const API_KEY_CONFIG = 'integrator'
 export const API_KEY_PREFIX = 'psk_'
@@ -56,6 +61,26 @@ function authOptions(options: AuthOptions) {
           rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 600 },
         },
       ]),
+      // Signing keys and /jwks for MCP access tokens only; sessions stay cookie-based.
+      jwt({ disableSettingJwtHeader: true, jwks: { rotationInterval: 90 * 24 * 60 * 60 } }),
+      // OAuth 2.1 for external agents (§6C.5). Tokens are audience-bound to our MCP URL and to one organization.
+      mcp({
+        resource: mcpResourceUrl(options.baseURL),
+        loginPage: '/sign-in/',
+        consentPage: '/consent/',
+        scopes: [...MCP_SCOPES],
+        accessTokenExpiresIn: 15 * 60,
+        allowDynamicClientRegistration: false,
+        // Nobody manages OAuth clients through Better Auth's endpoints; clients arrive through CIMD.
+        clientPrivileges: () => false,
+        postLogin: {
+          page: '/consent/',
+          shouldRedirect: () => false,
+          consentReferenceId: ({ session }) => orgForConsent(session),
+        },
+        customAccessTokenClaims: ({ referenceId }) => (referenceId ? { org: referenceId } : {}),
+      }),
+      cimd({ fetchClientMetadataResource, metadataProfile: 'mcp-2026-07-28' }),
     ],
     hooks: {
       // Invite-only: an HTTP sign-up needs a pending invitation for that email.
@@ -63,6 +88,10 @@ function authOptions(options: AuthOptions) {
       before: createAuthMiddleware(async (ctx) => {
         if (TEAM_PATHS.has(ctx.path)) {
           await guardTeamChange(options.db, ctx)
+          return
+        }
+        if (ctx.path === DISCONNECT_PATH) {
+          await revokeOnDisconnect(options.db, ctx)
           return
         }
         if (ctx.path !== '/sign-up/email' || !ctx.request) return
@@ -82,6 +111,7 @@ function authOptions(options: AuthOptions) {
       }),
       after: createAuthMiddleware(async (ctx) => {
         if (TEAM_PATHS.has(ctx.path)) await auditTeamChange(options.db, ctx)
+        if (ctx.path === CONSENT_PATH) await auditConsent(options.db, ctx)
       }),
     },
     databaseHooks: {

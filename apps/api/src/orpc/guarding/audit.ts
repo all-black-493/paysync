@@ -21,6 +21,7 @@ export async function auditDecision(
     surface: context.surface,
     userId: context.caller.actorId,
     agentSessionId: context.caller.agentSessionId,
+    mcpClientId: context.caller.mcpClientId,
     action,
     input: redact(input),
     decision,

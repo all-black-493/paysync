@@ -42,6 +42,9 @@
     },
     {
       "path": "../../packages/decisions"
+    },
+    {
+      "path": "../../packages/orpc-mcp"
     }
   ]
 }
