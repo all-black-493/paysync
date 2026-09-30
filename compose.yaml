@@ -85,6 +85,10 @@ services:
       CALLBACK_ALLOWED_IPS: ${CALLBACK_ALLOWED_IPS:-}
       JEV_ENABLED: ${JEV_ENABLED:-false}
       TYPESAFE_API_KEY_FILE: /run/secrets/typesafe_api_key
+      ASSISTANT_ENABLED: ${ASSISTANT_ENABLED:-false}
+      ASSISTANT_MODEL: ${ASSISTANT_MODEL:-gpt-5.4-mini}
+      ASSISTANT_TURNS_PER_HOUR: ${ASSISTANT_TURNS_PER_HOUR:-30}
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
       NODE_OPTIONS: --max-old-space-size=384
     secrets:
       - source: db_app_password
@@ -93,10 +97,11 @@ services:
       - callback_path_secret
       - data_encryption_key
       - typesafe_api_key
+      - openai_api_key
     depends_on:
       db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
-    # egress: the guard asks Jev (TypeSafe) about agent actions.
+    # egress: the guard asks Jev (TypeSafe) about agent actions; the assistant calls OpenAI.
     networks: [internal, edge, egress]
     deploy:
       resources:
@@ -289,3 +294,5 @@ secrets:
     file: ./secrets/ngrok_authtoken
   typesafe_api_key:
     file: ./secrets/typesafe_api_key
+  openai_api_key:
+    file: ./secrets/openai_api_key

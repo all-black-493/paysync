@@ -1,4 +1,6 @@
-import { oc } from '@orpc/contract'
+import { eventIterator, oc, type, type Schema } from '@orpc/contract'
+import type { AsyncIteratorClass } from '@orpc/shared'
+import type { UIMessageChunk } from 'ai'
 import { openapi } from '@orpc/openapi'
 import { z } from 'zod'
 import { agent } from './agent.js'
@@ -45,6 +47,7 @@ export const ERROR_STATUS = {
   BUDGET_EXCEEDED: 403,
   STEP_UP_REQUIRED: 403,
   RATE_LIMITED: 429,
+  ASSISTANT_OFF: 503,
 } as const
 
 export const errors = {
@@ -101,6 +104,9 @@ export const errors = {
   RATE_LIMITED: {
     message: 'Too many changes in a short time. Wait a minute and retry.',
   },
+  ASSISTANT_OFF: {
+    message: 'The assistant is not switched on for this installation.',
+  },
 } as const
 
 const Reference = z
@@ -120,6 +126,9 @@ const guarded = mutation.errors({
 })
 
 const Reason = z.string().trim().min(3).max(500).describe('Why, for the approver and the audit log.')
+
+/** AI SDK UI message chunks, streamed as they are produced (annotated so the contract's declaration stays portable). */
+const AssistantStream: Schema<AsyncIteratorObject<UIMessageChunk, unknown, void>, AsyncIteratorClass<UIMessageChunk, unknown, void>> = eventIterator(type<UIMessageChunk>())
 
 const Preview = <T extends z.ZodType>(item: T) =>
   z.object({ dryRun: z.boolean(), changed: z.boolean(), result: item }).strict()
@@ -665,6 +674,31 @@ export const contract = oc.meta(openapi({ prefix: '/v1' })).router({
       )
       .input(z.object({ date: IsoDate }).strict())
       .output(DailySummary),
+  },
+  // Never an agent tool (no agent meta): this is the chat that drives the agent.
+  assistant: {
+    chat: base
+      .errors({ RATE_LIMITED: errors.RATE_LIMITED, ASSISTANT_OFF: errors.ASSISTANT_OFF })
+      .meta(
+        openapi({
+          method: 'POST',
+          path: '/assistant/chat',
+          tags: ['assistant'],
+          summary: 'Chat with the in-app assistant',
+          description:
+            'Streams the assistant’s reply (AI SDK UI message chunks) to a person signed in to the web app. The assistant uses the same tools as agents, as that person, and every write goes through the guard; destructive and money actions still wait for another person to approve them. Not available to API keys.',
+        }),
+      )
+      .input(
+        z
+          .object({
+            chatId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+            // AI SDK UI messages; the server validates them against its own tool set.
+            messages: z.array(z.unknown()).min(1).max(200),
+          })
+          .strict(),
+      )
+      .output(AssistantStream),
   },
 })
 

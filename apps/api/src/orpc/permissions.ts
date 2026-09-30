@@ -26,6 +26,7 @@ export const PERMISSIONS = {
   approvals: { decide: 'approval.approve' },
   apiKeys: { list: 'apiKey.read', create: 'apiKey.create', revoke: 'apiKey.delete' },
   reports: { dailySummary: 'report.read' },
+  assistant: { chat: 'assistant.use' },
 } satisfies PermissionMap<Contract>
 
 export class UnmappedProcedureError extends Error {

@@ -2,11 +2,12 @@
 
 import type { MeOutput } from '@paysync/contract'
 import { useQuery } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { orpc } from '../../lib/orpc'
 import { permissionsFrom } from '../../lib/permissions'
 import { useUrlParam } from '../../lib/url-state'
 import { ApprovalsPanel } from '../approvals/approvals-panel'
+import { AssistantDrawer } from '../assistant/assistant-drawer'
 import { DetailDrawer, type DetailPermissions } from '../detail/detail-drawer'
 import { ExceptionsPanel } from '../exceptions/exceptions-panel'
 import { ExpectedPanel } from '../expected/expected-panel'
@@ -32,6 +33,8 @@ export function Workspace({ me }: { me: MeOutput }) {
     settings: permix.check('apiKey.read'),
   }
   const seesTotals = permix.check('report.read')
+  const canAssist = permix.check('assistant.use')
+  const [assistantOpen, setAssistantOpen] = useState(false)
   const [requested, setView] = useUrlParam<View>('view', VIEWS, 'exceptions')
 
   const summary = useQuery({ ...dailySummaryQuery(), enabled: seesTotals })
@@ -60,7 +63,7 @@ export function Workspace({ me }: { me: MeOutput }) {
     <>
       <div className="field-band">
         <div className="field-inner">
-          <Masthead me={me} />
+          <Masthead me={me} onAssistant={canAssist ? () => { setAssistantOpen(true) } : undefined} />
           {seesTotals ? <Console /> : null}
         </div>
       </div>
@@ -84,6 +87,7 @@ export function Workspace({ me }: { me: MeOutput }) {
         {view === 'settings' ? <SettingsPanel viewerId={me.actor.id} /> : null}
       </main>
       <DetailDrawer can={can} viewer={viewer} />
+      {canAssist ? <AssistantDrawer open={assistantOpen} onClose={() => { setAssistantOpen(false) }} /> : null}
     </>
   )
 }

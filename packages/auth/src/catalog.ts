@@ -12,6 +12,7 @@ export const APP_STATEMENTS = {
   approval: ['approve'],
   reversal: ['request'],
   apiKey: ['read', 'create', 'delete'],
+  assistant: ['use'],
 } as const
 
 export type AppEntity = keyof typeof APP_STATEMENTS
@@ -32,6 +33,7 @@ export const CUSTOM_ROLE_ENTITIES = [
   'reconciliation',
   'approval',
   'reversal',
+  'assistant',
 ] as const satisfies readonly AppEntity[]
 
 export interface PermissionInfo {
@@ -61,6 +63,7 @@ export const PERMISSION_CATALOG: readonly PermissionInfo[] = [
   { permission: 'match.unmatch', group: 'Requests', label: 'Request to undo a match', caution: 'Needs an approver.' },
   { permission: 'transaction.writeOff', group: 'Requests', label: 'Request a write-off', caution: 'Needs an approver.' },
   { permission: 'reversal.request', group: 'Requests', label: 'Request a reversal', caution: 'Moves money back; needs two approvers.' },
+  { permission: 'assistant.use', group: 'Assistant', label: 'Use the assistant', caution: 'Each message costs a little (OpenAI); the assistant acts only with this role’s permissions.' },
   {
     permission: 'approval.approve',
     group: 'Approving',
@@ -90,6 +93,7 @@ const CLERK: readonly AppPermission[] = [
   'match.confirm',
   'match.unmatch',
   'reconciliation.run',
+  'assistant.use',
 ]
 
 const ACCOUNTANT: readonly AppPermission[] = [...CLERK, 'approval.approve', 'reversal.request']

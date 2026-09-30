@@ -243,6 +243,7 @@ export const Permissions = z
     approval: flags('approve'),
     reversal: flags('request'),
     apiKey: flags('read', 'create', 'delete'),
+    assistant: flags('use'),
   })
   .strict()
   .describe('What this caller may do, as entity → action → allowed. Use it to decide which actions to offer; the API still enforces every call.')

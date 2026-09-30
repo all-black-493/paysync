@@ -266,6 +266,18 @@
               "delete"
             ],
             "additionalProperties": false
+          },
+          "assistant": {
+            "type": "object",
+            "properties": {
+              "use": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "use"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -278,7 +290,8 @@
           "reconciliation",
           "approval",
           "reversal",
-          "apiKey"
+          "apiKey",
+          "assistant"
         ],
         "additionalProperties": false,
         "description": "What this caller may do, as entity → action → allowed. Use it to decide which actions to offer; the API still enforces every call."
@@ -1507,6 +1520,27 @@
           "openExceptions"
         ],
         "additionalProperties": false
+      },
+      "AssistantOff": {
+        "title": "ASSISTANT_OFF",
+        "type": "object",
+        "properties": {
+          "defined": {
+            "const": true
+          },
+          "code": {
+            "const": "ASSISTANT_OFF"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        },
+        "required": [
+          "defined",
+          "code",
+          "message"
+        ]
       }
     }
   },
@@ -4685,6 +4719,162 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/assistant/chat": {
+      "post": {
+        "operationId": "assistant.chat",
+        "summary": "Chat with the in-app assistant",
+        "description": "Streams the assistant’s reply (AI SDK UI message chunks) to a person signed in to the web app. The assistant uses the same tools as agents, as that person, and every write goes through the guard; destructive and money actions still wait for another person to approve them. Not available to API keys.",
+        "tags": [
+          "assistant"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "chatId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{8,64}$"
+                  },
+                  "messages": {
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {}
+                  }
+                },
+                "required": [
+                  "chatId",
+                  "messages"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "event": {
+                          "const": "message"
+                        },
+                        "data": {},
+                        "id": {
+                          "type": "string"
+                        },
+                        "retry": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "event",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "event": {
+                          "const": "close"
+                        },
+                        "data": {},
+                        "id": {
+                          "type": "string"
+                        },
+                        "retry": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "event"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "event": {
+                          "const": "error"
+                        },
+                        "data": {},
+                        "id": {
+                          "type": "string"
+                        },
+                        "retry": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "event"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NotFound"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many changes in a short time. Wait a minute and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RateLimited"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UndefinedError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The assistant is not switched on for this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AssistantOff"
                     },
                     {
                       "$ref": "#/components/schemas/UndefinedError"

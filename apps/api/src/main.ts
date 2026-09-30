@@ -1,4 +1,5 @@
 import { inspect } from 'node:util'
+import { createAssistant } from './agent/assistant.js'
 import { createAuth } from './auth.js'
 import { createDb, createPool, loadMigrations } from '@paysync/db'
 import { jevFromConfig } from '@paysync/decisions'
@@ -36,11 +37,18 @@ const configSchema = z.object({
     .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean)),
 
   ...jevEnvShape,
+  ASSISTANT_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  ASSISTANT_MODEL: z.string().min(1).default('gpt-5.4-mini'),
+  ASSISTANT_TURNS_PER_HOUR: z.coerce.number().int().min(1).max(500).default(30),
+  OPENAI_API_KEY: z.string().min(20).optional(),
 })
 
 async function main(): Promise<void> {
   const config = loadConfig(configSchema, {
-    secrets: [...DATABASE_SECRETS, 'BETTER_AUTH_SECRET', 'CALLBACK_PATH_SECRET', 'DATA_ENCRYPTION_KEY', ...jevSecrets()],
+    secrets: [...DATABASE_SECRETS, 'BETTER_AUTH_SECRET', 'CALLBACK_PATH_SECRET', 'DATA_ENCRYPTION_KEY', ...jevSecrets(), ...(process.env.ASSISTANT_ENABLED === 'true' ? ['OPENAI_API_KEY'] : [])],
   })
   const logger = createLogger({ service: 'api', level: config.LOG_LEVEL })
   const pool = createPool({
@@ -52,11 +60,14 @@ async function main(): Promise<void> {
   })
   const db = createDb(pool)
   const auth = createAuth({ db, secret: config.BETTER_AUTH_SECRET, baseURL: config.PUBLIC_URL })
+  const assistant = createAssistant(config)
+  if (!assistant) logger.warn('ASSISTANT_ENABLED is off: the in-app assistant answers ASSISTANT_OFF')
   const { server, health } = createApiServer({
     pool,
     db,
     auth,
     jev: jevFromConfig(config),
+    ...(assistant ? { assistant } : {}),
     migrations: loadMigrations(),
     logger,
     publicUrl: config.PUBLIC_URL,

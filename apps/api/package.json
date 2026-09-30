@@ -8,6 +8,7 @@
     "!dist/**/*.test.*"
   ],
   "dependencies": {
+    "@ai-sdk/openai": "4.0.82",
     "@better-auth/api-key": "1.7.6",
     "@better-auth/drizzle-adapter": "1.7.6",
     "@orpc/ai-sdk": "2.0.0-beta.40",

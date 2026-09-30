@@ -4,6 +4,7 @@ import { and, asc, count, desc, eq, gt, gte, inArray, lt, or, sql, type SQL } fr
 import { z } from 'zod'
 import { authed, os } from './base.js'
 import { iso, normalizeReference, pageOf, toException, toExpectedPayment } from './mappers.js'
+import { assistantChat } from '../agent/chat.js'
 import { apiKeyProcedures } from './api-keys.js'
 import { approvalProcedures, pendingActionProcedures } from './approvals/index.js'
 import {
@@ -235,6 +236,7 @@ export const router = os.router({
   pendingActions: pendingActionProcedures,
   approvals: approvalProcedures,
   reports: { dailySummary },
+  assistant: { chat: assistantChat },
 })
 
 export type Router = typeof router
