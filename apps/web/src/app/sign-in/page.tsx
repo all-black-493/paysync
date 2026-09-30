@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, type SubmitEvent } from 'react'
-import { TwoFactorCodeForm } from '../../components/two-factor-code'
+import { EntryLayout } from '../../components/entry/entry-layout'
+import { TwoFactorCodeForm } from '../../components/entry/two-factor-code'
+import { FormMessage, type Message } from '../../components/ui/form-message'
 import { authClient, needsSecondFactor } from '../../lib/auth-client'
 import { field } from '../../lib/format'
 
@@ -12,7 +14,7 @@ function goNext() {
 }
 
 export default function SignInPage() {
-  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<Message | null>(null)
   const [pending, setPending] = useState(false)
   const [step, setStep] = useState<'password' | 'code'>('password')
 
@@ -20,14 +22,11 @@ export default function SignInPage() {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     setPending(true)
-    setError(null)
-    const { data, error: signInError } = await authClient.signIn.email({
-      email: field(form, 'email'),
-      password: field(form, 'password'),
-    })
+    setMessage(null)
+    const { data, error } = await authClient.signIn.email({ email: field(form, 'email'), password: field(form, 'password') })
     setPending(false)
-    if (signInError) {
-      setError(signInError.status === 429 ? 'Too many attempts. Wait a moment and try again.' : 'Email or password is wrong.')
+    if (error) {
+      setMessage({ tone: 'error', text: error.status === 429 ? 'Too many attempts. Wait a moment and try again.' : 'Email or password is wrong.' })
       return
     }
     if (needsSecondFactor(data)) {
@@ -38,36 +37,28 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="auth">
-      <div className="card auth-card">
-        <h1>Paysync</h1>
+    <EntryLayout>
+      <div className="entry-form">
+        <h2>{step === 'code' ? 'Enter your code' : 'Sign in'}</h2>
         {step === 'code' ? (
-          <>
-            <p className="muted">Two-factor authentication is on for this account.</p>
-            <TwoFactorCodeForm onVerified={goNext} />
-          </>
+          <TwoFactorCodeForm onVerified={goNext} />
         ) : (
           <form className="stack" onSubmit={(e) => void onSubmit(e)}>
-            <p className="muted">Sign in to your reconciliation workspace.</p>
-            <label>
-              Email
+            <label className="field">
+              <span>Email</span>
               <input name="email" type="email" autoComplete="username" required />
             </label>
-            <label>
-              Password
+            <label className="field">
+              <span>Password</span>
               <input name="password" type="password" autoComplete="current-password" required minLength={12} />
             </label>
-            {error ? (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            ) : null}
-            <button type="submit" disabled={pending}>
+            <button type="submit" className="btn btn-primary btn-block" disabled={pending} aria-busy={pending}>
               {pending ? 'Signing in…' : 'Sign in'}
             </button>
+            <FormMessage message={message} />
           </form>
         )}
       </div>
-    </main>
+    </EntryLayout>
   )
 }

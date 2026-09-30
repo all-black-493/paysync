@@ -35,3 +35,6 @@ sbom/
 data/
 skills/
 skills-lock.json
+
+# Impeccable review captures (regenerated on each design pass)
+apps/web/.impeccable/review/

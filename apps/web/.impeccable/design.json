@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-30T00:40:00Z",
+  "title": "Design System: Paysync",
+  "extensions": {
+    "colorMeta": {
+      "navy": { "role": "primary", "displayName": "Ledger Navy" },
+      "blue": { "role": "accent", "displayName": "Registry Blue" },
+      "teal": { "role": "success", "displayName": "Network Teal" },
+      "danger": { "role": "danger", "displayName": "Danger" },
+      "paper": { "role": "neutral", "displayName": "Paper White" },
+      "ink": { "role": "neutral", "displayName": "Ink Black" },
+      "ink-quiet": { "role": "neutral", "displayName": "Quiet Gray" },
+      "rule": { "role": "neutral", "displayName": "Rule Gray" },
+      "steel": { "role": "neutral", "displayName": "Steel Rule" },
+      "mint": { "role": "surface", "displayName": "Mint Paper" },
+      "sky": { "role": "surface", "displayName": "Sky Paper" }
+    },
+    "typographyMeta": {
+      "figure": { "displayName": "Figure", "purpose": "Today's totals in the navy console." },
+      "heading": { "displayName": "Heading", "purpose": "Entry screen titles and empty-state titles." },
+      "section": { "displayName": "Section", "purpose": "Settings and Security section heads." },
+      "body": { "displayName": "Body", "purpose": "Record titles, meta, prose." },
+      "label": { "displayName": "Label", "purpose": "Table heads, field labels, status words." },
+      "action": { "displayName": "Action", "purpose": "Buttons, tabs, filters." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "state", "value": "150ms ease-out", "purpose": "Border and colour changes on controls." },
+      { "name": "reveal", "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "An opened workbench or step-up appearing; off under reduced motion." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "720px" },
+      { "name": "narrow", "value": "900px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Commits: Allocate, Approve, Request, Save.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Approve</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border: 1px solid #ced3dc; border-radius: 4px; background: #fff; color: #000; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.02em; text-transform: uppercase; cursor: pointer; transition: background-color 150ms ease-out, border-color 150ms ease-out; } .ds-btn-primary { background: #09234f; border-color: #09234f; color: #fff; } .ds-btn-primary:hover { background: #13306a; border-color: #13306a; } .ds-btn-primary:active { background: #384ce3; border-color: #384ce3; } .ds-btn:focus-visible { outline: 2px solid #384ce3; outline-offset: 2px; }"
+    },
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Every non-committing action.",
+      "html": "<button class=\"ds-btn\">Match</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border: 1px solid #ced3dc; border-radius: 4px; background: #fff; color: #000; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.02em; text-transform: uppercase; cursor: pointer; transition: border-color 150ms ease-out; } .ds-btn:hover { border-color: #000; } .ds-btn:active { background: #eff5f0; } .ds-btn:focus-visible { outline: 2px solid #384ce3; outline-offset: 2px; }"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Mono label above a square-cornered input.",
+      "html": "<label class=\"ds-field\"><span>Amount (KES)</span><input value=\"1,250.00\"></label>",
+      "css": ".ds-field { display: grid; gap: 6px; } .ds-field span { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.02em; text-transform: uppercase; color: #595959; } .ds-field input { min-height: 40px; padding: 0 12px; border: 1px solid #ced3dc; border-radius: 4px; font: 16px 'Uncut Sans', sans-serif; color: #000; } .ds-field input:hover { border-color: #595959; } .ds-field input:focus-visible { border-color: #384ce3; outline: 1px solid #384ce3; }"
+    },
+    {
+      "name": "Status",
+      "kind": "chip",
+      "refersTo": "status",
+      "description": "Square marker plus one mono word; never a pill.",
+      "html": "<span class=\"ds-status\">Verified</span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 8px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.02em; text-transform: uppercase; color: #000; } .ds-status::before { content: ''; width: 8px; height: 8px; background: #1888a2; }"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Sticky paper rail under the navy field.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab\" aria-selected=\"true\">Exceptions <span class=\"ds-count\">7</span></button><button class=\"ds-tab\">Approvals</button></div>",
+      "css": ".ds-tabs { display: flex; gap: 24px; border-bottom: 1px solid #e5e5e5; } .ds-tab { display: inline-flex; align-items: center; gap: 8px; min-height: 52px; padding: 0; border: 0; border-bottom: 2px solid transparent; background: none; color: #595959; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.02em; text-transform: uppercase; cursor: pointer; } .ds-tab:hover { color: #000; } .ds-tab[aria-selected='true'] { color: #000; border-bottom-color: #384ce3; } .ds-count { padding: 2px 5px; border-radius: 2px; background: #384ce3; color: #fff; font-size: 11px; }"
+    },
+    {
+      "name": "Console",
+      "kind": "custom",
+      "refersTo": "console",
+      "description": "Today's totals on the navy field with a rule grid.",
+      "html": "<dl class=\"ds-console\"><div><dt>Received today</dt><dd><small>KES</small>12,500.00</dd></div><div><dt>Open exceptions</dt><dd>7</dd></div></dl>",
+      "css": ".ds-console { display: grid; grid-template-columns: repeat(2, 1fr); margin: 0; padding: 0 20px; color: #fff; background-image: linear-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / 0.05) 1px, transparent 1px), linear-gradient(90deg, #09234f 0%, #384ce3 100%); background-size: 48px 48px, 48px 48px, 100% 100%; } .ds-console div { padding: 24px 20px 32px; border-left: 1px solid rgb(255 255 255 / 0.2); } .ds-console div:first-child { border-left: 0; padding-left: 0; } .ds-console dt { font-family: 'Geist Mono', monospace; font-size: 12px; text-transform: uppercase; color: #c4f0ff; } .ds-console dd { margin: 12px 0 0; font-family: 'Source Serif 4', Georgia, serif; font-size: 36px; font-weight: 515; } .ds-console small { margin-right: 6px; font-family: 'Geist Mono', monospace; font-size: 13px; color: #c4f0ff; vertical-align: 0.9em; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The ledger and the console",
+    "overview": "Paysync is a bank ledger opened on a live verification console. Records sit on white, ruled paper: square, separated by 1px lines, never floating in cards. The day's position lives in one navy field at the top, with a faint grid of rules, like a console reading out the ledger. The world comes from the owner's chosen reference, Baselayer (styles.refero.design), adapted to a dense operations tool with free, self-hosted stand-in fonts.\n\nIt refuses the rounded-card SaaS dashboard: pill badges, stacks of shadowed cards, a filled accent button on every row, grey captions restating what the screen already says.",
+    "keyCharacteristics": [
+      "White paper canvas, ink text, one navy field (header and today's totals) with a 48px rule grid.",
+      "Serif for figures and entry headings, sans for reading, mono uppercase for labels and actions.",
+      "Square records and 1px rules; 4px corners only on controls.",
+      "Status is a small square marker plus a mono word, never a pill.",
+      "One navy filled button, only where something is committed (Allocate, Approve, Request)."
+    ],
+    "rules": [
+      { "name": "The One Field Rule", "body": "Navy owns exactly one region per screen (the masthead and totals, or the sign-in side). Everything else is paper.", "section": "colors" },
+      { "name": "The Figures Rule", "body": "Money in tables is set in mono and right-aligned; money as a headline figure is serif. Never proportional sans for amounts in columns.", "section": "typography" },
+      { "name": "The Flat Ledger Rule", "body": "If something needs to stand apart, give it a rule or a surface color, never a shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep records square and ruled; use Mint Paper for anything being edited.",
+      "Do say a status as a marker plus one mono word (\"Verified\", \"Waiting\", \"Part paid\").",
+      "Do show times relative (\"2 days ago\") with the exact East Africa time on hover.",
+      "Do show payer-typed text in mono as plain data, and never in an approval's change list.",
+      "Do keep copy to what the person needs to act: no captions that restate the screen."
+    ],
+    "donts": [
+      "Don't use shadows, pills, rounded cards, or gradients outside the navy field.",
+      "Don't put a filled button on every row; navy is for the commit.",
+      "Don't use Registry Blue as a general button color; it marks the active thing.",
+      "Don't put a label or kicker above a heading.",
+      "Don't add a second navy region to a screen."
+    ]
+  }
+}

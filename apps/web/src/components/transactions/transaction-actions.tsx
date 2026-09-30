@@ -1,10 +1,9 @@
 'use client'
 
-import type { TransactionOutput } from '@paysync/contract'
-import { useQuery } from '@tanstack/react-query'
-import { field, formatKes, parseKes } from '../lib/format'
-import { client, orpc } from '../lib/orpc'
-import { RequestAction } from './request-action'
+import type { MatchOutput, TransactionOutput } from '@paysync/contract'
+import { field, formatAmount, parseKes } from '../../lib/format'
+import { client } from '../../lib/orpc'
+import { RequestAction } from '../requests/request-action'
 
 export interface TransactionPermissions {
   readonly writeOff: boolean
@@ -13,7 +12,15 @@ export interface TransactionPermissions {
 }
 
 /** Guarded requests on one payment; each waits for an approver. */
-export function TransactionActions({ transaction: t, can }: { transaction: TransactionOutput; can: TransactionPermissions }) {
+export function TransactionActions({
+  transaction: t,
+  matches,
+  can,
+}: {
+  transaction: TransactionOutput
+  matches: readonly MatchOutput[]
+  can: TransactionPermissions
+}) {
   const verified = t.status === 'verified'
   const unallocated = BigInt(t.unallocated.minor)
   const untouched = unallocated === BigInt(t.amount.minor)
@@ -29,36 +36,29 @@ export function TransactionActions({ transaction: t, can }: { transaction: Trans
             return client.transactions.writeOffVariance({ transactionId: t.id, version: t.version, amount: { minor, currency: 'KES' }, reason, idempotencyKey })
           }}
         >
-          <label>
-            Amount (KES)
-            <input name="amount" inputMode="decimal" required defaultValue={formatKes(t.unallocated).replace('KES ', '')} />
+          <label className="field">
+            <span>Amount (KES)</span>
+            <input name="amount" inputMode="decimal" required defaultValue={formatAmount(t.unallocated)} autoFocus />
           </label>
         </RequestAction>
       ) : null}
       {verified && can.reverse && untouched ? (
         <RequestAction
           label="Reverse"
-          submitLabel="Request reversal (two approvers)"
+          submitLabel="Request reversal"
           submit={({ reason, idempotencyKey }) => client.reversals.request({ transactionId: t.id, version: t.version, reason, idempotencyKey })}
         />
       ) : null}
-      {can.unmatch && BigInt(t.allocated.minor) > 0n ? <UnmatchAction transactionId={t.id} /> : null}
+      {can.unmatch
+        ? matches.map((m) => (
+            <RequestAction
+              key={m.id}
+              label="Undo match"
+              submitLabel="Request undo"
+              submit={({ reason, idempotencyKey }) => client.matches.unmatch({ id: m.id, reason, idempotencyKey })}
+            />
+          ))
+        : null}
     </div>
-  )
-}
-
-function UnmatchAction({ transactionId }: { transactionId: string }) {
-  const matches = useQuery(orpc.matches.list.queryOptions({ input: { transactionId, status: 'active' } }))
-  return (
-    <>
-      {matches.data?.items.map((m) => (
-        <RequestAction
-          key={m.id}
-          label="Undo match"
-          submitLabel="Request undo"
-          submit={({ reason, idempotencyKey }) => client.matches.unmatch({ id: m.id, reason, idempotencyKey })}
-        />
-      ))}
-    </>
   )
 }

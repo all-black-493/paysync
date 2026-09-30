@@ -5,6 +5,20 @@ Newest milestone first.
 
 ---
 
+## Web redesign (Baselayer) — 2026-09-30
+
+Owner asked for a UI audit before M6, then chose Baselayer (styles.refero.design style 0c55e725) as the style.
+
+- Audit (Impeccable + anti-ui-slop + ui-ux-pro-max): 11/20. Main problems: no font chosen (system-ui rendered monospace on Linux), generic card stack, raw JSON diff for approvers, machine status names, tabs clipped on phones, no tab semantics, per-row match queries.
+- Rebuilt `apps/web` in the new world: navy masthead + totals console with a rule grid, sticky mono tab rail, ruled records instead of cards, square status markers, one navy commit button per task, approval cards with a readable "After approval" list (allowlisted fields; payer text never shown there), relative times, empty states that say what the list is for.
+- Structure: styles split by concern (`src/styles/tokens|base|controls|frame|ledger|approvals.css`); components by feature (`workspace/`, `exceptions/`, `approvals/`, `transactions/`, `expected/`, `settings/`, `security/`, `entry/`, `requests/`, `ui/`); copy and status vocabulary in `lib/labels.ts`; URL state in `lib/url-state.ts`.
+- Behaviour fixes: WAI-ARIA tabs with arrow keys; `?view=` and `&status=` in the URL (Back works); status messages announced (`role=status`/`alert`); 44px controls on phones; Transactions loads active matches once instead of per row.
+- Fonts: free stand-ins, self-hosted with `next/font/local` (no dependency added, no Google requests): Uncut Sans (Baselayer's real body face), Source Serif 4 for Season, Geist Mono for Modern Era Mono. OFL licences committed next to the files in `apps/web/src/fonts`.
+- Design records: `apps/web/PRODUCT.md`, `apps/web/DESIGN.md`, `apps/web/.impeccable/design.json`, direction contract in `apps/web/.impeccable/surfaces/`. Review captures are git-ignored.
+- Verified: lint, web build, verify-images (23 ok), Impeccable detector clean, desktop 1440 and phone 390 captures with no horizontal scroll; clerk request → accountant (password + TOTP) reject flow works in the new UI. The finish review ran in-thread (no reviewer agent available): one fix round (mobile org name, console grid), then resolved.
+
+---
+
 ## M5: Guard (static) — done 2026-09-30
 
 ### Done-when evidence
